@@ -1,0 +1,65 @@
+{
+  "name": "tsgo-strict",
+  "version": "0.1.0",
+  "description": "High-performance strict-only TypeScript checking with tsgo and subset file support",
+  "keywords": [
+    "typescript",
+    "tsgo",
+    "typecheck",
+    "strict",
+    "cli"
+  ],
+  "license": "MIT",
+  "type": "module",
+  "packageManager": "pnpm@10.10.0",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "bin": {
+    "tsgo-strict": "dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier . --check",
+    "format:write": "prettier . --write",
+    "prepush:check": "pnpm typecheck && pnpm test && pnpm build",
+    "prepare": "test -d .git && husky || true"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "fast-glob": "^3.3.3",
+    "minimatch": "^10.1.1",
+    "typescript": "^5.8.3",
+    "yargs": "^17.7.2"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.38.0",
+    "@types/node": "^22.15.14",
+    "@types/yargs": "^17.0.33",
+    "@typescript/native-preview": "7.0.0-dev.20260417.1",
+    "eslint": "^9.38.0",
+    "eslint-config-prettier": "^10.1.8",
+    "husky": "^9.1.7",
+    "lint-staged": "^15.5.2",
+    "prettier": "^3.6.2",
+    "typescript-eslint": "^8.46.1",
+    "vitest": "^3.1.2"
+  },
+  "lint-staged": {
+    "*.{ts,tsx,mts,cts,js,mjs,cjs,json,md,yml,yaml}": [
+      "prettier --write"
+    ],
+    "*.{ts,tsx,mts,cts}": [
+      "eslint --fix"
+    ]
+  }
+}
