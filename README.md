@@ -42,7 +42,8 @@ tsgo-strict [fileOrGlob ...]
 
 - v1 supports single `tsconfig` runs.
 - Set `TSGO_BINARY=/path/to/tsgo` to override backend binary discovery.
-- Set `TSGO_STRICT_PARALLEL=1` to run exact mode passes concurrently.
+- Exact mode runs baseline/strict passes concurrently by default.
+- Set `TSGO_STRICT_PARALLEL=0` to force sequential exact-mode passes.
 
 ## Development commands
 

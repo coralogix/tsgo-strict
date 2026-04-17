@@ -78,12 +78,13 @@ async function main(): Promise<void> {
   timer.end('config-load');
 
   timer.start('file-resolution');
+  const subsetFiles = resolveSubsetInputs(options.subsetInputs, options.cwd);
+  const projectScopeFiles = resolveProjectScope(context.projectFiles, subsetFiles);
   const strictCandidates = findStrictCandidates(
-    context.projectFiles,
+    projectScopeFiles,
     context.strictPluginConfig,
     context.configDir
   );
-  const subsetFiles = resolveSubsetInputs(options.subsetInputs, options.cwd);
   const effectiveTargets = resolveEffectiveTargets(strictCandidates, subsetFiles);
   timer.end('file-resolution');
 
@@ -108,36 +109,8 @@ async function main(): Promise<void> {
 
     diagnostics = filterToTargets(strictResult.diagnostics, effectiveTargets);
   } else {
-    const parallel = process.env.TSGO_STRICT_PARALLEL === '1';
-    if (!parallel) {
-      timer.start('baseline-run');
-      const baseline = await runTsgo({
-        cwd: options.cwd,
-        projectPath: context.projectPath,
-        rawConfig: context.rawConfig,
-        files: effectiveTargets,
-        strictEnabled: false,
-        pretty: options.pretty
-      });
-      timer.end('baseline-run');
-      timer.start('strict-run');
-      const strict = await runTsgo({
-        cwd: options.cwd,
-        projectPath: context.projectPath,
-        rawConfig: context.rawConfig,
-        files: effectiveTargets,
-        strictEnabled: true,
-        pretty: options.pretty
-      });
-      timer.end('strict-run');
-
-      timer.start('diff');
-      diagnostics = diffDiagnostics(
-        filterToTargets(strict.diagnostics, effectiveTargets),
-        filterToTargets(baseline.diagnostics, effectiveTargets)
-      );
-      timer.end('diff');
-    } else {
+    const parallel = process.env['TSGO_STRICT_PARALLEL'] !== '0';
+    if (parallel) {
       timer.start('baseline-run');
       timer.start('strict-run');
       const baselinePromise = runTsgo({
@@ -158,6 +131,34 @@ async function main(): Promise<void> {
       });
       const [baseline, strict] = await Promise.all([baselinePromise, strictPromise]);
       timer.end('baseline-run');
+      timer.end('strict-run');
+
+      timer.start('diff');
+      diagnostics = diffDiagnostics(
+        filterToTargets(strict.diagnostics, effectiveTargets),
+        filterToTargets(baseline.diagnostics, effectiveTargets)
+      );
+      timer.end('diff');
+    } else {
+      timer.start('baseline-run');
+      const baseline = await runTsgo({
+        cwd: options.cwd,
+        projectPath: context.projectPath,
+        rawConfig: context.rawConfig,
+        files: effectiveTargets,
+        strictEnabled: false,
+        pretty: options.pretty
+      });
+      timer.end('baseline-run');
+      timer.start('strict-run');
+      const strict = await runTsgo({
+        cwd: options.cwd,
+        projectPath: context.projectPath,
+        rawConfig: context.rawConfig,
+        files: effectiveTargets,
+        strictEnabled: true,
+        pretty: options.pretty
+      });
       timer.end('strict-run');
 
       timer.start('diff');
@@ -189,16 +190,21 @@ async function main(): Promise<void> {
 }
 
 function resolveEffectiveTargets(strictCandidates: string[], subsetFiles: string[]): string[] {
-  const strictSet = new Set(strictCandidates.map(normalize));
-
   if (subsetFiles.length === 0) {
     return strictCandidates;
   }
 
   const subsetSet = new Set(subsetFiles.map(normalize));
-  return strictCandidates.filter(
-    (file) => subsetSet.has(normalize(file)) && strictSet.has(normalize(file))
-  );
+  return strictCandidates.filter((file) => subsetSet.has(normalize(file)));
+}
+
+function resolveProjectScope(projectFiles: string[], subsetFiles: string[]): string[] {
+  if (subsetFiles.length === 0) {
+    return projectFiles;
+  }
+
+  const subsetSet = new Set(subsetFiles.map(normalize));
+  return projectFiles.filter((file) => subsetSet.has(normalize(file)));
 }
 
 function filterToTargets(diagnostics: Diagnostic[], targets: string[]): Diagnostic[] {

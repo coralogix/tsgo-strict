@@ -1,5 +1,4 @@
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import { spawn } from 'node:child_process';
@@ -7,7 +6,6 @@ import type { Diagnostic, TsgoRunResult } from '../types/index.js';
 
 const STRICT_FAMILY_FLAGS = [
   'strict',
-  'alwaysStrict',
   'strictBindCallApply',
   'strictBuiltinIteratorReturn',
   'strictFunctionTypes',
@@ -62,7 +60,9 @@ export async function runTsgo(input: RunInput): Promise<TsgoRunResult> {
 }
 
 function writeTempConfig(input: RunInput): string {
-  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tsgo-strict-'));
+  const tempParent = path.join(input.cwd, '.tsgo-strict-tmp');
+  fs.mkdirSync(tempParent, { recursive: true });
+  const tempDir = fs.mkdtempSync(path.join(tempParent, 'run-'));
   const configPath = path.join(tempDir, input.strictEnabled ? 'strict.json' : 'baseline.json');
 
   const compilerOptions = {
@@ -132,10 +132,7 @@ function resolveTsgoBinary(cwd: string): string {
   return 'tsgo';
 }
 
-function resolveBinaryFromPackage(
-  require: NodeRequire,
-  packageName: string
-): string | undefined {
+function resolveBinaryFromPackage(require: NodeRequire, packageName: string): string | undefined {
   const packageJsonPath = require.resolve(`${packageName}/package.json`);
   const packageDir = path.dirname(packageJsonPath);
   const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8')) as {
@@ -200,7 +197,7 @@ function parseDiagnostics(stdout: string, stderr: string, cwd: string): Diagnost
   let current: Diagnostic | null = null;
 
   for (const rawLine of lines) {
-    const line = rawLine.trimEnd();
+    const line = stripAnsi(rawLine).trimEnd();
     if (!line) {
       continue;
     }
@@ -224,6 +221,28 @@ function parseDiagnostics(stdout: string, stderr: string, cwd: string): Diagnost
   }
 
   return diagnostics;
+}
+
+function stripAnsi(value: string): string {
+  let out = '';
+  let i = 0;
+  while (i < value.length) {
+    const ch = value.charCodeAt(i);
+    // ANSI CSI sequence: ESC [ ... m
+    if (ch === 27 && value.charCodeAt(i + 1) === 91) {
+      i += 2;
+      while (i < value.length && value[i] !== 'm') {
+        i += 1;
+      }
+      if (i < value.length) {
+        i += 1;
+      }
+      continue;
+    }
+    out += value[i];
+    i += 1;
+  }
+  return out;
 }
 
 function parseDiagnosticLine(line: string, cwd: string): Diagnostic | null {

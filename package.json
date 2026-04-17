@@ -30,6 +30,9 @@
     "format": "prettier . --check",
     "format:write": "prettier . --write",
     "prepush:check": "pnpm typecheck && pnpm test && pnpm build",
+    "perf:generate": "node perf-demo/scripts/generate.mjs",
+    "perf:check": "node dist/cli.js --project perf-demo/tsconfig.json --trace-performance",
+    "perf:subset": "node dist/cli.js perf-demo/src/batch-00 --project perf-demo/tsconfig.json --trace-performance",
     "prepare": "test -d .git && husky || true"
   },
   "engines": {
