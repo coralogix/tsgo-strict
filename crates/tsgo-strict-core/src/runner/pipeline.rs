@@ -50,7 +50,7 @@ pub fn run_structured(options: &CliOptions) -> Result<StructuredOutcome, Error> 
     };
 
     let strict_candidates = find_strict_candidates(
-        &project_files,
+        project_files,
         context.strict_plugin_config.as_ref(),
         &context.config_dir,
     )?;

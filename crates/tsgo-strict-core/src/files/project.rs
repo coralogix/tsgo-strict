@@ -3,7 +3,6 @@ use crate::errors::Error;
 use camino::Utf8PathBuf;
 use globset::{Glob, GlobSetBuilder};
 use ignore::WalkBuilder;
-use std::collections::HashSet;
 
 const TS_EXTENSIONS: &[&str] = &["ts", "tsx", "cts", "mts"];
 const DEFAULT_IGNORE: &[&str] = &["**/node_modules/**", "**/.git/**"];
@@ -78,15 +77,7 @@ pub fn enumerate_project_files(ctx: &ProjectContext) -> Result<ProjectScope, Err
         files.push(path);
     }
 
-    let mut dedup: HashSet<Utf8PathBuf> = HashSet::with_capacity(files.len());
-    let mut out = Vec::with_capacity(files.len());
-    for f in files {
-        if dedup.insert(f.clone()) {
-            out.push(f);
-        }
-    }
-
-    Ok(ProjectScope { files: out })
+    Ok(ProjectScope { files })
 }
 
 fn explicit_files(ctx: &ProjectContext) -> Result<Option<Vec<Utf8PathBuf>>, Error> {

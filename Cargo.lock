@@ -687,6 +687,7 @@ dependencies = [
  "globset",
  "ignore",
  "jsonc-parser",
+ "memchr",
  "once_cell",
  "rayon",
  "regex",

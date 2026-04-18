@@ -45,19 +45,15 @@ pub fn classify_head(head: &[u8]) -> PragmaHint {
 }
 
 /// Find `needle` in `haystack` and require a non-word character (or EOF) after it,
-/// emulating the `\b` word boundary from the TS regex without allocating a Regex.
+/// emulating the `\b` word boundary from the TS regex. Uses SIMD-accelerated
+/// `memmem` instead of a naive byte loop.
 fn contains_pragma(haystack: &[u8], needle: &[u8]) -> bool {
-    let mut i = 0;
-    while i + needle.len() <= haystack.len() {
-        if &haystack[i..i + needle.len()] == needle {
-            let after = haystack.get(i + needle.len()).copied();
-            match after {
-                None => return true,
-                Some(b) if !is_word_byte(b) => return true,
-                _ => {}
-            }
+    for pos in memchr::memmem::find_iter(haystack, needle) {
+        match haystack.get(pos + needle.len()).copied() {
+            None => return true,
+            Some(b) if !is_word_byte(b) => return true,
+            _ => {}
         }
-        i += 1;
     }
     false
 }

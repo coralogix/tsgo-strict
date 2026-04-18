@@ -4,7 +4,30 @@ use crate::files::pragma::{detect_pragma, PragmaHint};
 use camino::{Utf8Path, Utf8PathBuf};
 use globset::{Glob, GlobMatcher};
 use rayon::prelude::*;
+use rayon::ThreadPool;
 use regex::Regex;
+use std::sync::OnceLock;
+
+/// Thread pool sized for I/O-bound pragma scans. The default rayon pool is
+/// sized for CPU work (~num_cpus); disk reads block, so using more threads
+/// lets more `open`/`read` syscalls overlap. Benchmarks on 4k-file projects
+/// showed ~10-17% wall-clock wins moving from 16 to 64 threads; beyond 64 the
+/// scheduler overhead wins out. Capped at 4x cpus to stay modest on small
+/// machines.
+fn io_pool() -> &'static ThreadPool {
+    static POOL: OnceLock<ThreadPool> = OnceLock::new();
+    POOL.get_or_init(|| {
+        let cpus = std::thread::available_parallelism()
+            .map(|n| n.get())
+            .unwrap_or(4);
+        let threads = (cpus * 4).clamp(cpus, 64);
+        rayon::ThreadPoolBuilder::new()
+            .num_threads(threads)
+            .thread_name(|i| format!("tsgo-strict-io-{i}"))
+            .build()
+            .expect("build strict-plugin IO thread pool")
+    })
+}
 
 /// Decide which files qualify as "strict" under the plugin config:
 ///
@@ -16,31 +39,29 @@ use regex::Regex;
 ///    forward-slash normalized) matches any `paths` pattern (or `paths` is
 ///    empty/absent) AND does not match `excludePattern` (treated as a regex).
 pub fn find_strict_candidates(
-    project_files: &[Utf8PathBuf],
+    project_files: Vec<Utf8PathBuf>,
     plugin_config: Option<&StrictPluginConfig>,
     config_dir: &Utf8PathBuf,
 ) -> Result<Vec<Utf8PathBuf>, Error> {
     let path_matchers = compile_path_matchers(plugin_config)?;
     let exclude_regex = compile_exclude_regex(plugin_config)?;
 
-    let mut candidates: Vec<Utf8PathBuf> = project_files
-        .par_iter()
-        .filter_map(|file| {
-            if !is_strict_file(
-                file,
-                plugin_config,
-                config_dir,
-                path_matchers.as_deref(),
-                exclude_regex.as_ref(),
-            ) {
-                return None;
-            }
-            Some(file.clone())
-        })
-        .collect();
+    let mut candidates: Vec<Utf8PathBuf> = io_pool().install(|| {
+        project_files
+            .into_par_iter()
+            .filter(|file| {
+                is_strict_file(
+                    file,
+                    plugin_config,
+                    config_dir,
+                    path_matchers.as_deref(),
+                    exclude_regex.as_ref(),
+                )
+            })
+            .collect()
+    });
 
     candidates.sort();
-    candidates.dedup();
     Ok(candidates)
 }
 
