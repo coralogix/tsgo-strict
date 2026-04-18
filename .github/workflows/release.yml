@@ -90,36 +90,42 @@ jobs:
             target: x86_64-unknown-linux-gnu
             runner: ubuntu-latest
             cross: false
+            napi: true
             bin_ext: ''
             addon_src: libtsgo_strict_napi.so
           - triple: linux-x64-musl
             target: x86_64-unknown-linux-musl
             runner: ubuntu-latest
             cross: true
+            napi: false  # musl does not support cdylib
             bin_ext: ''
-            addon_src: libtsgo_strict_napi.so
+            addon_src: ''
           - triple: linux-arm64-gnu
             target: aarch64-unknown-linux-gnu
             runner: ubuntu-latest
             cross: true
+            napi: true
             bin_ext: ''
             addon_src: libtsgo_strict_napi.so
           - triple: darwin-x64
             target: x86_64-apple-darwin
             runner: macos-13
             cross: false
+            napi: true
             bin_ext: ''
             addon_src: libtsgo_strict_napi.dylib
           - triple: darwin-arm64
             target: aarch64-apple-darwin
             runner: macos-14
             cross: false
+            napi: true
             bin_ext: ''
             addon_src: libtsgo_strict_napi.dylib
           - triple: win32-x64-msvc
             target: x86_64-pc-windows-msvc
             runner: windows-latest
             cross: false
+            napi: true
             bin_ext: '.exe'
             addon_src: tsgo_strict_napi.dll
     runs-on: ${{ matrix.runner }}
@@ -152,12 +158,12 @@ jobs:
         run: cross build --release --target ${{ matrix.target }} -p tsgo-strict
 
       - name: Build N-API addon (native)
-        if: '!matrix.cross'
+        if: matrix.napi && !matrix.cross
         shell: bash
         run: cargo build --release --target ${{ matrix.target }} -p tsgo-strict-napi
 
       - name: Build N-API addon (cross)
-        if: matrix.cross
+        if: matrix.napi && matrix.cross
         shell: bash
         run: cross build --release --target ${{ matrix.target }} -p tsgo-strict-napi
 
@@ -166,11 +172,13 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p npm/platforms/${{ matrix.triple }}/bin
-          mkdir -p npm/platforms/${{ matrix.triple }}/native
           cp "target/${{ matrix.target }}/release/tsgo-strict${{ matrix.bin_ext }}" \
              "npm/platforms/${{ matrix.triple }}/bin/tsgo-strict${{ matrix.bin_ext }}"
-          cp "target/${{ matrix.target }}/release/${{ matrix.addon_src }}" \
-             "npm/platforms/${{ matrix.triple }}/native/tsgo-strict.node"
+          if [[ "${{ matrix.napi }}" == "true" ]]; then
+            mkdir -p npm/platforms/${{ matrix.triple }}/native
+            cp "target/${{ matrix.target }}/release/${{ matrix.addon_src }}" \
+               "npm/platforms/${{ matrix.triple }}/native/tsgo-strict.node"
+          fi
 
       - name: Upload platform package artifact
         uses: actions/upload-artifact@v4
