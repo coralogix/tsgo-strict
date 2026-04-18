@@ -43,12 +43,13 @@ function platformPackageJson() {
 }
 
 function resolveBinary() {
-  const { pkg, packagePath } = platformPackageJson();
-  const binField = pkg.bin;
-  const relative = typeof binField === 'string' ? binField : binField && binField['tsgo-strict'];
-  if (!relative) {
-    throw new Error(`tsgo-strict: platform package has no bin entry`);
-  }
+  // Don't rely on the platform package's `bin` field: declaring it there
+  // collides with the same key on this launcher and causes npm to drop the
+  // `.bin/tsgo-strict` symlink on install. Hard-code the staged path
+  // instead — it matches what the release workflow writes into
+  // `npm/platforms/<triple>/bin/`.
+  const { packagePath } = platformPackageJson();
+  const relative = process.platform === 'win32' ? 'bin/tsgo-strict.exe' : 'bin/tsgo-strict';
   return path.resolve(path.dirname(packagePath), relative);
 }
 
