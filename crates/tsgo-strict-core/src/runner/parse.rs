@@ -96,11 +96,28 @@ fn parse_category(raw: &str) -> Category {
 
 fn resolve_relative(cwd: &Utf8PathBuf, file: &str) -> Utf8PathBuf {
     let p = std::path::Path::new(file);
-    let joined = if p.is_absolute() {
-        p.to_path_buf()
-    } else {
-        cwd.as_std_path().join(p)
-    };
+    if p.is_absolute() {
+        return Utf8PathBuf::try_from(normalize_path(p))
+            .unwrap_or_else(|_| Utf8PathBuf::from(file));
+    }
+
+    // tsgo emits file paths relative to the config file. When the config
+    // lives in a temp directory and the source files have absolute paths in
+    // the `files` array, tsgo may emit paths like `../../path/to/src/app.ts`
+    // where stripping the `../` prefixes reveals the original absolute path.
+    // Try that first before falling back to joining against cwd.
+    let stripped = file.trim_start_matches("../");
+    let with_slash = format!("/{}", stripped);
+    let candidate = std::path::Path::new(&with_slash);
+    if candidate.is_absolute() {
+        let normalized = normalize_path(candidate);
+        if normalized.exists() {
+            return Utf8PathBuf::try_from(normalized)
+                .unwrap_or_else(|_| Utf8PathBuf::from(file));
+        }
+    }
+
+    let joined = cwd.as_std_path().join(p);
     let cleaned = normalize_path(&joined);
     Utf8PathBuf::try_from(cleaned).unwrap_or_else(|_| Utf8PathBuf::from(file))
 }

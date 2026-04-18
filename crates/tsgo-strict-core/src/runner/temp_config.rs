@@ -48,18 +48,13 @@ pub fn write_temp_config(
         compiler_options.insert(flag.to_string(), serde_json::Value::Bool(true));
     }
 
-    let relative_files: Vec<serde_json::Value> = files
+    // Use absolute paths in the files array. Relative paths cause tsgo to
+    // emit diagnostic paths that are difficult to map back to the original
+    // file paths, especially when the temp config lives in a nested temp
+    // directory.
+    let absolute_files: Vec<serde_json::Value> = files
         .iter()
-        .map(|f| {
-            // `diff_paths` returns `Some("")` when the file path equals the
-            // temp-dir path; tsgo would reject an empty `files[]` entry, so
-            // fall back to the absolute path in that edge case.
-            let rel = pathdiff::diff_paths(f.as_std_path(), dir.path())
-                .map(|p| p.to_string_lossy().replace('\\', "/"))
-                .filter(|s| !s.is_empty())
-                .unwrap_or_else(|| f.to_string());
-            serde_json::Value::String(rel)
-        })
+        .map(|f| serde_json::Value::String(f.to_string()))
         .collect();
 
     let mut root = serde_json::Map::new();
@@ -73,7 +68,7 @@ pub fn write_temp_config(
     );
     root.insert(
         "files".to_string(),
-        serde_json::Value::Array(relative_files),
+        serde_json::Value::Array(absolute_files),
     );
 
     let body = serde_json::to_string_pretty(&serde_json::Value::Object(root))
