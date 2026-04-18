@@ -24,12 +24,8 @@ pub struct RunInput<'a> {
 }
 
 pub fn run_tsgo(input: RunInput<'_>) -> Result<TsgoRunResult, Error> {
-    let temp: TempConfig = write_temp_config(
-        input.cwd,
-        input.project_path,
-        input.raw_config,
-        input.files,
-    )?;
+    let temp: TempConfig =
+        write_temp_config(input.cwd, input.project_path, input.raw_config, input.files)?;
 
     let started = Instant::now();
 
