@@ -63,6 +63,8 @@ echo
 echo "Runs: $RUNS  Warmup: $WARMUP"
 echo '| Scenario                               | Median    | Samples (ms) |'
 echo '|----------------------------------------|-----------|--------------|'
-bench "tsgo-strict full project"    "$RUST_BIN" --project "$PROJECT"
+# Both run with cwd=perf-demo so node_modules (and @types/node) resolve
+# identically for tsgo and tsc.
+RUST_BIN_ABS="$PWD/$RUST_BIN"
+bench "tsgo-strict full project"    bash -c "cd perf-demo && $RUST_BIN_ABS --project tsconfig.json"
 bench "tsc-strict  full project"    bash -c 'cd perf-demo && PATH="$PWD/node_modules/.bin:$PATH" ./node_modules/.bin/tsc-strict -p tsconfig.json'
-bench "tsgo-strict subset batch-00" "$RUST_BIN" --project "$PROJECT" "$SUBSET_DIR"

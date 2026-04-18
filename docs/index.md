@@ -31,7 +31,7 @@ features:
     details: 'Drop a <code>// @ts-strict</code> or <code>// @ts-strict-ignore</code> at the top of a file and it wins over your plugin config. Migrate at your own pace.'
   - icon: ⚡
     title: Rust-fast, tsgo-powered
-    details: 'Config parsing in under a millisecond and parallel pragma scanning via rayon. <strong>2.48× faster</strong> end-to-end than the TS implementation.'
+    details: 'Config parsing in under a millisecond and parallel pragma scanning via rayon. <strong>~7.7× faster</strong> end-to-end than <code>typescript-strict-plugin</code> + <code>tsc</code> on a 4,001-file project.'
   - icon: 🔌
     title: Zero-config plugin block
     details: 'Reuses <code>typescript-strict-plugin</code>''s config shape in <code>compilerOptions.plugins</code>. No extra config file, no custom runner.'
@@ -45,8 +45,8 @@ features:
 
 <div class="tss-stats">
   <div class="tss-stat">
-    <div class="tss-stat-value">2.48×</div>
-    <div class="tss-stat-label">faster full-project runs vs the TS port</div>
+    <div class="tss-stat-value">~7.7×</div>
+    <div class="tss-stat-label">faster full-project runs vs <code>typescript-strict-plugin</code> + <code>tsc</code></div>
   </div>
   <div class="tss-stat">
     <div class="tss-stat-value">&lt;1 ms</div>
