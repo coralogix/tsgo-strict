@@ -32,6 +32,25 @@ importers:
       detect-libc:
         specifier: ^2.0.3
         version: 2.1.2
+    optionalDependencies:
+      '@tsgo-strict/darwin-arm64':
+        specifier: workspace:*
+        version: link:../platforms/darwin-arm64
+      '@tsgo-strict/darwin-x64':
+        specifier: workspace:*
+        version: link:../platforms/darwin-x64
+      '@tsgo-strict/linux-arm64-gnu':
+        specifier: workspace:*
+        version: link:../platforms/linux-arm64-gnu
+      '@tsgo-strict/linux-x64-gnu':
+        specifier: workspace:*
+        version: link:../platforms/linux-x64-gnu
+      '@tsgo-strict/linux-x64-musl':
+        specifier: workspace:*
+        version: link:../platforms/linux-x64-musl
+      '@tsgo-strict/win32-x64-msvc':
+        specifier: workspace:*
+        version: link:../platforms/win32-x64-msvc
 
 packages:
 

@@ -61,7 +61,7 @@ jobs:
           version: 10
 
       - name: Install workspace deps (for @typescript/native-preview + detect-libc)
-        run: pnpm install --frozen-lockfile=false
+        run: pnpm install --frozen-lockfile
 
       - name: Run Node integration tests
         run: pnpm test:node

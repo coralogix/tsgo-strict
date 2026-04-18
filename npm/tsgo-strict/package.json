@@ -30,12 +30,12 @@
     "node": ">=18"
   },
   "optionalDependencies": {
-    "@tsgo-strict/linux-x64-gnu": "0.1.0",
-    "@tsgo-strict/linux-x64-musl": "0.1.0",
-    "@tsgo-strict/linux-arm64-gnu": "0.1.0",
-    "@tsgo-strict/darwin-x64": "0.1.0",
-    "@tsgo-strict/darwin-arm64": "0.1.0",
-    "@tsgo-strict/win32-x64-msvc": "0.1.0"
+    "@tsgo-strict/linux-x64-gnu": "workspace:*",
+    "@tsgo-strict/linux-x64-musl": "workspace:*",
+    "@tsgo-strict/linux-arm64-gnu": "workspace:*",
+    "@tsgo-strict/darwin-x64": "workspace:*",
+    "@tsgo-strict/darwin-arm64": "workspace:*",
+    "@tsgo-strict/win32-x64-msvc": "workspace:*"
   },
   "dependencies": {
     "detect-libc": "^2.0.3"
