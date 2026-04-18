@@ -2,13 +2,18 @@ use crate::errors::Error;
 use camino::Utf8PathBuf;
 use std::path::{Path, PathBuf};
 
-/// Locate the `tsgo` binary:
+/// Locate the native `tsgo` binary:
 ///
 /// 1. `TSGO_BINARY` env var (trimmed, non-empty).
-/// 2. Walk up from `cwd` checking `node_modules/.bin/tsgo` (or `.cmd`/`.exe`).
+/// 2. Walk up from `cwd` looking for the platform-specific native binary inside
+///    `@typescript/native-preview-{platform}-{arch}/lib/tsgo`.
 /// 3. Walk up from `cwd` checking `node_modules/@typescript/native-preview/`
 ///    and `node_modules/tsgo/` for their package.json bin entry.
 /// 4. Fall back to `which tsgo` on PATH.
+///
+/// We intentionally skip `node_modules/.bin/tsgo` because it is a Node.js ESM
+/// wrapper script. Spawning it adds Node startup overhead, and on some Node
+/// versions the `#getExePath` package import fails entirely.
 pub fn resolve_tsgo_binary(cwd: &Utf8PathBuf) -> Result<Utf8PathBuf, Error> {
     if let Ok(v) = std::env::var("TSGO_BINARY") {
         let trimmed = v.trim();
@@ -17,7 +22,7 @@ pub fn resolve_tsgo_binary(cwd: &Utf8PathBuf) -> Result<Utf8PathBuf, Error> {
         }
     }
 
-    if let Some(bin) = find_node_modules_bin(cwd.as_std_path()) {
+    if let Some(bin) = find_native_preview_binary(cwd.as_std_path()) {
         return Ok(Utf8PathBuf::try_from(bin).unwrap());
     }
 
@@ -40,26 +45,53 @@ pub fn resolve_tsgo_binary(cwd: &Utf8PathBuf) -> Result<Utf8PathBuf, Error> {
     }
 }
 
-fn bin_name() -> &'static str {
+/// Resolve the platform-specific package name for `@typescript/native-preview`.
+/// Mirrors the logic in `@typescript/native-preview/lib/getExePath.js`.
+fn native_preview_platform_package() -> Option<String> {
+    let platform = if cfg!(target_os = "linux") {
+        "linux"
+    } else if cfg!(target_os = "macos") {
+        "darwin"
+    } else if cfg!(target_os = "windows") {
+        "win32"
+    } else {
+        return None;
+    };
+
+    let arch = if cfg!(target_arch = "x86_64") {
+        "x64"
+    } else if cfg!(target_arch = "aarch64") {
+        "arm64"
+    } else if cfg!(target_arch = "arm") {
+        "arm"
+    } else {
+        return None;
+    };
+
+    Some(format!("@typescript/native-preview-{}-{}", platform, arch))
+}
+
+fn exe_name() -> &'static str {
     if cfg!(windows) {
-        "tsgo.cmd"
+        "tsgo.exe"
     } else {
         "tsgo"
     }
 }
 
-fn find_node_modules_bin(start: &Path) -> Option<PathBuf> {
+/// Walk up from `start` looking for the native tsgo binary inside the
+/// platform-specific `@typescript/native-preview-{platform}-{arch}` package.
+fn find_native_preview_binary(start: &Path) -> Option<PathBuf> {
+    let package = native_preview_platform_package()?;
     let mut dir: Option<&Path> = Some(start);
     while let Some(d) = dir {
-        let candidate = d.join("node_modules").join(".bin").join(bin_name());
+        let candidate = d
+            .join("node_modules")
+            .join(&package)
+            .join("lib")
+            .join(exe_name());
         if candidate.is_file() {
             return Some(candidate);
-        }
-        if cfg!(windows) {
-            let exe = d.join("node_modules").join(".bin").join("tsgo.exe");
-            if exe.is_file() {
-                return Some(exe);
-            }
         }
         dir = d.parent();
     }
@@ -129,23 +161,30 @@ mod tests {
     }
 
     #[test]
-    fn find_node_modules_bin_walks_up_from_nested_cwd() {
+    fn find_native_preview_binary_discovers_platform_package() {
         let tmp = TempDir::new().unwrap();
         let root = tmp.path();
-        let bin = root.join("node_modules").join(".bin").join(bin_name());
-        touch_exe(&bin);
+        if let Some(pkg) = native_preview_platform_package() {
+            let bin = root
+                .join("node_modules")
+                .join(&pkg)
+                .join("lib")
+                .join(exe_name());
+            touch_exe(&bin);
 
-        let nested = root.join("packages").join("app").join("src");
-        fs::create_dir_all(&nested).unwrap();
+            let nested = root.join("packages").join("app").join("src");
+            fs::create_dir_all(&nested).unwrap();
 
-        let found = find_node_modules_bin(&nested).expect("bin should be discovered");
-        assert_eq!(found, bin);
+            let found =
+                find_native_preview_binary(&nested).expect("native binary should be discovered");
+            assert_eq!(found, bin);
+        }
     }
 
     #[test]
-    fn find_node_modules_bin_returns_none_when_absent() {
+    fn find_native_preview_binary_returns_none_when_absent() {
         let tmp = TempDir::new().unwrap();
-        assert!(find_node_modules_bin(tmp.path()).is_none());
+        assert!(find_native_preview_binary(tmp.path()).is_none());
     }
 
     #[test]
@@ -169,7 +208,6 @@ mod tests {
 
     #[test]
     fn find_package_bin_returns_none_when_bin_file_missing() {
-        // package.json points at a path that is not on disk → treated as unresolved.
         let tmp = TempDir::new().unwrap();
         let pkg_dir = tmp.path().join("node_modules").join("tsgo");
         write_pkg(&pkg_dir, &serde_json::json!({ "tsgo": "bin/missing.js" }));
@@ -197,8 +235,6 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         let fake = tmp.path().join("my-tsgo");
         touch_exe(&fake);
-        // SAFETY: tests that mutate env run serially via `cargo test -- --test-threads=1`
-        // when needed, but the env var is scoped to this scope and restored at drop.
         let _guard = EnvGuard::set("TSGO_BINARY", fake.to_str().unwrap());
 
         let cwd = Utf8PathBuf::from_path_buf(tmp.path().to_path_buf()).unwrap();

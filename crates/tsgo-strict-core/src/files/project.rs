@@ -139,7 +139,15 @@ fn build_glob_set(
                 format!("{}/{}", base.as_str().trim_end_matches('/'), pattern)
             };
 
-        let glob = Glob::new(&anchored)
+        // TypeScript treats bare directory names (no glob chars) as `dir/**/*`.
+        // Append `/**` so that a pattern like `src` matches `src/foo/bar.ts`.
+        let expanded = if !anchored.contains('*') && !anchored.contains('?') {
+            format!("{}/**", anchored.trim_end_matches('/'))
+        } else {
+            anchored
+        };
+
+        let glob = Glob::new(&expanded)
             .map_err(|e| Error::msg(format!("invalid glob pattern '{}': {}", pattern, e)))?;
         builder.add(glob);
     }
