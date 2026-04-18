@@ -45,7 +45,7 @@
     </g>
     <g transform="translate(200,0)">
       <rect width="180" height="52" rx="26" fill="rgba(110,86,207,0.22)" stroke="#6e56cf" stroke-width="1.5"/>
-      <text x="90" y="34" text-anchor="middle" fill="#c9b8ff">2.48× faster</text>
+      <text x="90" y="34" text-anchor="middle" fill="#c9b8ff">~7.7× faster</text>
     </g>
     <g transform="translate(400,0)">
       <rect width="220" height="52" rx="26" fill="rgba(229,57,53,0.20)" stroke="#e53935" stroke-width="1.5"/>
