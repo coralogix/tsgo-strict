@@ -1,6 +1,6 @@
 {
   "name": "@tsgo-strict/linux-arm64-gnu",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Native tsgo-strict binary for Linux arm64 (glibc)",
   "license": "MIT",
   "repository": {
@@ -16,7 +16,13 @@
     "native/tsgo-strict.node",
     "README.md"
   ],
-  "os": ["linux"],
-  "cpu": ["arm64"],
-  "libc": ["glibc"]
+  "os": [
+    "linux"
+  ],
+  "cpu": [
+    "arm64"
+  ],
+  "libc": [
+    "glibc"
+  ]
 }
