@@ -115,6 +115,13 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    # Trusted publishing: npm exchanges the workflow's GitHub OIDC token for
+    # a short-lived publish token at the registry. No NPM_TOKEN secret, no
+    # long-lived credential to rotate. Requires the package's "Trusted
+    # Publishers" entry on npmjs.com to name this repo + workflow file.
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - uses: actions/checkout@v4
 
@@ -123,6 +130,15 @@ jobs:
         with:
           node-version: 20
           registry-url: https://registry.npmjs.org
+
+      # Trusted publishing requires npm >= 11.5.1 (the version that knows how
+      # to do the OIDC token exchange). Node 20 ships with npm 10.x, so bump.
+      - name: Upgrade npm to a version that supports trusted publishing
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install -g npm@latest
+          npm --version
 
       - name: Download all platform artifacts
         uses: actions/download-artifact@v4
@@ -140,38 +156,74 @@ jobs:
             rm -rf "npm/platforms/${triple}"
             mv "${d}" "npm/platforms/${triple}"
           done
-          ls -la npm/platforms/
           for d in npm/platforms/*/; do
             echo "=== ${d} ==="
             ls -la "${d}"
-            ls -la "${d}bin/" || true
+            [[ -d "${d}bin" ]]    && ls -la "${d}bin"
+            [[ -d "${d}native" ]] && ls -la "${d}native"
           done
 
-      - name: Publish platform packages (dry-run)
+      # Derive the version once from the tag (tag-triggered) or input
+      # (workflow_dispatch dry-run path) and stamp it into every publishable
+      # package.json plus the `workspace:*` optionalDeps in the launcher.
+      # `npm publish` does not resolve the pnpm `workspace:` protocol, so
+      # without this the published main package is broken at install time.
+      - name: Resolve release version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            version="${GITHUB_REF#refs/tags/v}"
+          else
+            # Dry-run path: use whatever is currently in the launcher
+            # package.json. Lets us exercise the publish plumbing from
+            # workflow_dispatch without having to pick a real version.
+            version="$(node -p "require('./npm/tsgo-strict/package.json').version")"
+          fi
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "resolved version: ${version}"
+
+      - name: Stamp versions into package.json files
+        shell: bash
+        run: node scripts/stamp-versions.mjs "${{ steps.version.outputs.version }}"
+
+      # Dry-run from `workflow_dispatch` on main, no registry writes. Useful
+      # for verifying artifacts + manifests land correctly without cutting
+      # a real release.
+      - name: Publish all packages (dry-run)
         if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
         shell: bash
         run: |
           set -euo pipefail
           for d in npm/platforms/*/; do
+            echo "::group::dry-run publish ${d}"
             (cd "$d" && npm publish --access public --provenance --dry-run)
+            echo "::endgroup::"
           done
+          echo "::group::dry-run publish npm/tsgo-strict"
           (cd npm/tsgo-strict && npm publish --access public --provenance --dry-run)
+          echo "::endgroup::"
 
+      # Real publish: platform packages first so `tsgo-strict`'s
+      # optionalDependencies resolve on npm by the time the launcher is
+      # published. Each `npm publish` performs its own OIDC exchange, so no
+      # token is configured anywhere.
       - name: Publish platform packages
         if: startsWith(github.ref, 'refs/tags/v')
         shell: bash
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           set -euo pipefail
           for d in npm/platforms/*/; do
+            echo "::group::publish ${d}"
             (cd "$d" && npm publish --access public --provenance)
+            echo "::endgroup::"
           done
 
       - name: Publish main package
         if: startsWith(github.ref, 'refs/tags/v')
         shell: bash
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          cd npm/tsgo-strict && npm publish --access public --provenance
+          set -euo pipefail
+          cd npm/tsgo-strict
+          npm publish --access public --provenance
