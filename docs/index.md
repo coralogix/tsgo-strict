@@ -25,7 +25,7 @@ hero:
 features:
   - icon: 🎯
     title: Strict, scoped precisely
-    details: Check the 14 strict-family flags only for the files, directories, or globs you've opted in — everything else stays on your normal tsconfig.
+    details: Flip <code>"strict": true</code> only for the files, directories, or globs you've opted in — everything else stays on your normal tsconfig.
   - icon: 🧭
     title: Pragma-driven overrides
     details: Drop a <code>// @ts-strict</code> or <code>// @ts-strict-ignore</code> at the top of a file and it wins over your plugin config. Migrate at your own pace.
@@ -53,8 +53,8 @@ features:
     <div class="tss-stat-label">tsconfig parsing (vs ~100 ms from Node startup)</div>
   </div>
   <div class="tss-stat">
-    <div class="tss-stat-value">14</div>
-    <div class="tss-stat-label">strict-family flags, enabled only where you want</div>
+    <div class="tss-stat-value">strict</div>
+    <div class="tss-stat-label">flipped on only where you want — same override as the original plugin</div>
   </div>
   <div class="tss-stat">
     <div class="tss-stat-value">6</div>

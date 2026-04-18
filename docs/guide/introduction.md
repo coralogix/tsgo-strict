@@ -15,8 +15,8 @@ resolved via `optionalDependencies`).
 - Reads `typescript-strict-plugin` config from `compilerOptions.plugins`.
 - Honors `// @ts-strict` / `// @ts-strict-ignore` pragmas.
 - Supports checking an explicit subset of files or globs from the CLI.
-- Runs `tsgo` once with the 14 strict-family flags enabled, scoped to the
-  selected files, and reports the diagnostics it produces.
+- Runs `tsgo` once with `"strict": true` enabled, scoped to the selected
+  files, and reports the diagnostics it produces.
 
 ## Why you'd use it
 

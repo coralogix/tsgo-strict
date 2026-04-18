@@ -75,24 +75,18 @@ plugin in a base config and inherit it across projects.
 ## What "strict mode" means here
 
 When `tsgo-strict` runs the underlying `tsgo` compiler, it writes a
-temporary tsconfig that `extends` yours with **the 14 strict-family flags
-enabled** and pins the include list to the selected files. Concretely that's
-the flags you'd get from `"strict": true` plus the related strictness knobs:
+temporary tsconfig that `extends` yours with **`"strict": true`** and pins
+the include list to the selected files. This matches the behavior of the
+original `typescript-strict-plugin`: flip `strict` and let the compiler
+unfurl it into the standard strict bundle (`strictNullChecks`,
+`noImplicitAny`, `strictFunctionTypes`, `strictBindCallApply`,
+`strictPropertyInitialization`, `noImplicitThis`,
+`useUnknownInCatchVariables`, `alwaysStrict`).
 
-- `strict`
-- `strictBindCallApply`
-- `strictBuiltinIteratorReturn`
-- `strictFunctionTypes`
-- `strictNullChecks`
-- `strictPropertyInitialization`
-- `noImplicitAny`
-- `noImplicitThis`
-- `noImplicitOverride`
-- `noImplicitReturns`
-- `noFallthroughCasesInSwitch`
-- `noUncheckedIndexedAccess`
-- `noUnusedLocals`
-- `noUnusedParameters`
+Additional opt-ins like `noUncheckedIndexedAccess`,
+`exactOptionalPropertyTypes`, `noImplicitReturns`, `noUnusedLocals`, or
+`noUnusedParameters` are **not** forced on — if you want them, enable them
+in your own tsconfig.
 
 Everything else in your tsconfig (paths, lib, jsx, target, moduleResolution,
 etc.) is preserved.
