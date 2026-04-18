@@ -107,16 +107,9 @@ jobs:
             napi: true
             bin_ext: ''
             addon_src: libtsgo_strict_napi.so
-          - triple: darwin-x64
-            target: x86_64-apple-darwin
-            runner: macos-13
-            cross: false
-            napi: true
-            bin_ext: ''
-            addon_src: libtsgo_strict_napi.dylib
           - triple: darwin-arm64
             target: aarch64-apple-darwin
-            runner: macos-14
+            runner: macos-15
             cross: false
             napi: true
             bin_ext: ''

@@ -18,7 +18,6 @@ function pickPackage() {
     if (family === MUSL) return null;
     return '@tsgo-strict/linux-arm64-gnu';
   }
-  if (platform === 'darwin' && arch === 'x64') return '@tsgo-strict/darwin-x64';
   if (platform === 'darwin' && arch === 'arm64') return '@tsgo-strict/darwin-arm64';
   if (platform === 'win32' && arch === 'x64') return '@tsgo-strict/win32-x64-msvc';
   return null;
