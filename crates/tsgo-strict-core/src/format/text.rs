@@ -4,36 +4,15 @@ use std::cmp::Ordering;
 
 pub struct TextOutput {
     pub text: String,
-    pub displayed_count: usize,
     pub total_count: usize,
-    pub truncated: bool,
 }
 
-pub fn format_text_output(
-    diagnostics: &[Diagnostic],
-    cwd: &Utf8PathBuf,
-    max_diagnostics: Option<usize>,
-) -> TextOutput {
+pub fn format_text_output(diagnostics: &[Diagnostic], cwd: &Utf8PathBuf) -> TextOutput {
     let mut sorted: Vec<&Diagnostic> = diagnostics.iter().collect();
     sorted.sort_by(|a, b| diagnostic_cmp(a, b));
 
     let total_count = sorted.len();
-    let truncated = matches!(max_diagnostics, Some(n) if n > 0 && total_count > n);
-    let displayed = match max_diagnostics {
-        Some(n) if truncated => &sorted[..n],
-        _ => &sorted[..],
-    };
-
-    let mut lines: Vec<String> = displayed.iter().map(|d| format_line(d, cwd)).collect();
-
-    if truncated {
-        let n = max_diagnostics.unwrap();
-        lines.push(format!(
-            "... {} additional diagnostics omitted by --max-diagnostics={}",
-            total_count - n,
-            n
-        ));
-    }
+    let mut lines: Vec<String> = sorted.iter().map(|d| format_line(d, cwd)).collect();
 
     lines.push(format!(
         "Found {} strict error{}.",
@@ -43,9 +22,7 @@ pub fn format_text_output(
 
     TextOutput {
         text: lines.join("\n"),
-        displayed_count: displayed.len(),
         total_count,
-        truncated,
     }
 }
 

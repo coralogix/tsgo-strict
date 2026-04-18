@@ -2,7 +2,7 @@
 'use strict';
 
 const { spawnSync } = require('node:child_process');
-const { resolveBinary } = require('..');
+const { resolveBinary } = require('../lib/resolve');
 
 try {
   const binary = resolveBinary();

@@ -1,38 +1,36 @@
 use crate::binary::resolve_tsgo_binary;
-use crate::config::{load_project_context, ProjectContext};
+use crate::config::load_project_context;
 use crate::diagnostics::{Category, Diagnostic};
-use crate::diff::diff_diagnostics;
 use crate::errors::Error;
 use crate::files::{enumerate_project_files, find_strict_candidates, resolve_subset_inputs};
-use crate::format::{format_json_output, format_text_output};
-use crate::options::{CliOptions, Mode};
+use crate::format::format_text_output;
+use crate::options::CliOptions;
 use crate::perf::{Timer, TimerEntry};
 use crate::runner::spawn::{run_tsgo, RunInput};
 use camino::Utf8PathBuf;
 use std::collections::HashSet;
 
+const STRICT_PLUGIN_NAME: &str = "typescript-strict-plugin";
+
 pub struct RunOutcome {
     pub stdout: String,
-    pub stderr_timings: Option<String>,
     pub exit_code: i32,
 }
 
 /// Structured result suitable for programmatic consumers (the N-API addon,
-/// integration tests). Same pipeline as [`run`], minus text/JSON formatting —
+/// integration tests). Same pipeline as [`run`], minus text formatting —
 /// the caller renders as needed.
 pub struct StructuredOutcome {
-    pub mode: Mode,
     pub diagnostics: Vec<Diagnostic>,
     pub timings: Vec<TimerEntry>,
     pub exit_code: i32,
-    pub max_diagnostics: Option<usize>,
 }
 
 pub fn run_structured(options: &CliOptions) -> Result<StructuredOutcome, Error> {
     let mut timer = Timer::new();
 
     timer.start("config-load");
-    let context = load_project_context(&options.cwd, &options.project, &options.strict_plugin)?;
+    let context = load_project_context(&options.cwd, &options.project, STRICT_PLUGIN_NAME)?;
     timer.end("config-load");
 
     timer.start("file-resolution");
@@ -58,20 +56,25 @@ pub fn run_structured(options: &CliOptions) -> Result<StructuredOutcome, Error> 
 
     if effective_targets.is_empty() {
         return Ok(StructuredOutcome {
-            mode: options.mode,
             diagnostics: Vec::new(),
             timings: timer.entries().to_vec(),
             exit_code: 0,
-            max_diagnostics: options.max_diagnostics,
         });
     }
 
     let binary = resolve_tsgo_binary(&options.cwd)?;
 
-    let diagnostics = match options.mode {
-        Mode::Fast => run_fast(&context, &binary, &effective_targets, options, &mut timer)?,
-        Mode::Exact => run_exact(&context, &binary, &effective_targets, options, &mut timer)?,
-    };
+    timer.start("strict-run");
+    let result = run_tsgo(RunInput {
+        cwd: &options.cwd,
+        project_path: &context.project_path,
+        raw_config: &context.raw_config,
+        files: &effective_targets,
+        binary: &binary,
+    })?;
+    timer.end("strict-run");
+
+    let diagnostics = filter_to_targets(result.diagnostics, &effective_targets);
 
     let errors: Vec<Diagnostic> = diagnostics
         .into_iter()
@@ -81,191 +84,19 @@ pub fn run_structured(options: &CliOptions) -> Result<StructuredOutcome, Error> 
     let exit_code = if errors.is_empty() { 0 } else { 1 };
 
     Ok(StructuredOutcome {
-        mode: options.mode,
         diagnostics: errors,
         timings: timer.entries().to_vec(),
         exit_code,
-        max_diagnostics: options.max_diagnostics,
     })
 }
 
 pub fn run(options: &CliOptions) -> Result<RunOutcome, Error> {
     let structured = run_structured(options)?;
-
-    let mut timer = Timer::from_entries(structured.timings.clone());
-
-    timer.start("formatting");
-    let body = if options.json {
-        format_json_output(
-            &structured.diagnostics,
-            structured.mode,
-            structured.max_diagnostics,
-        )
-        .text
-    } else {
-        format_text_output(
-            &structured.diagnostics,
-            &options.cwd,
-            structured.max_diagnostics,
-        )
-        .text
-    };
-    timer.end("formatting");
-
-    let stderr_timings = options.trace_performance.then(|| render_timings(&timer));
-
+    let body = format_text_output(&structured.diagnostics, &options.cwd).text;
     Ok(RunOutcome {
         stdout: format!("{body}\n"),
-        stderr_timings,
         exit_code: structured.exit_code,
     })
-}
-
-fn run_fast(
-    context: &ProjectContext,
-    binary: &Utf8PathBuf,
-    targets: &[Utf8PathBuf],
-    options: &CliOptions,
-    timer: &mut Timer,
-) -> Result<Vec<Diagnostic>, Error> {
-    timer.start("strict-run");
-    let result = run_tsgo(RunInput {
-        cwd: &options.cwd,
-        project_path: &context.project_path,
-        raw_config: &context.raw_config,
-        files: targets,
-        strict_enabled: true,
-        pretty: options.pretty,
-        binary,
-    })?;
-    timer.end("strict-run");
-
-    Ok(filter_to_targets(result.diagnostics, targets))
-}
-
-fn run_exact(
-    context: &ProjectContext,
-    binary: &Utf8PathBuf,
-    targets: &[Utf8PathBuf],
-    options: &CliOptions,
-    timer: &mut Timer,
-) -> Result<Vec<Diagnostic>, Error> {
-    let parallel = std::env::var("TSGO_STRICT_PARALLEL").ok().as_deref() != Some("0");
-
-    let (baseline, strict) = if parallel {
-        timer.start("baseline-run");
-        timer.start("strict-run");
-        let results = run_parallel(context, binary, targets, options)?;
-        timer.end("baseline-run");
-        timer.end("strict-run");
-        results
-    } else {
-        timer.start("baseline-run");
-        let baseline = run_tsgo(RunInput {
-            cwd: &options.cwd,
-            project_path: &context.project_path,
-            raw_config: &context.raw_config,
-            files: targets,
-            strict_enabled: false,
-            pretty: options.pretty,
-            binary,
-        })?;
-        timer.end("baseline-run");
-        timer.start("strict-run");
-        let strict = run_tsgo(RunInput {
-            cwd: &options.cwd,
-            project_path: &context.project_path,
-            raw_config: &context.raw_config,
-            files: targets,
-            strict_enabled: true,
-            pretty: options.pretty,
-            binary,
-        })?;
-        timer.end("strict-run");
-        (baseline, strict)
-    };
-
-    let strict_filtered = filter_to_targets(strict.diagnostics, targets);
-    let baseline_filtered = filter_to_targets(baseline.diagnostics, targets);
-
-    timer.start("diff");
-    let diffed = diff_diagnostics(strict_filtered, &baseline_filtered);
-    timer.end("diff");
-
-    Ok(diffed)
-}
-
-fn run_parallel(
-    context: &ProjectContext,
-    binary: &Utf8PathBuf,
-    targets: &[Utf8PathBuf],
-    options: &CliOptions,
-) -> Result<
-    (
-        crate::runner::spawn::TsgoRunResult,
-        crate::runner::spawn::TsgoRunResult,
-    ),
-    Error,
-> {
-    let baseline_input = BuiltRunInput::from(context, binary, targets, options, false);
-    let strict_input = BuiltRunInput::from(context, binary, targets, options, true);
-
-    std::thread::scope(|scope| {
-        let baseline = scope.spawn(|| run_tsgo(baseline_input.as_input()));
-        let strict = scope.spawn(|| run_tsgo(strict_input.as_input()));
-        let baseline = baseline
-            .join()
-            .map_err(|_| Error::msg("baseline tsgo thread panicked"))??;
-        let strict = strict
-            .join()
-            .map_err(|_| Error::msg("strict tsgo thread panicked"))??;
-        Ok((baseline, strict))
-    })
-}
-
-/// Owned copy of RunInput fields so we can move it into a scoped thread. The
-/// RunInput struct itself holds borrows, which don't survive across thread
-/// boundaries the way we want for clarity here.
-struct BuiltRunInput {
-    cwd: Utf8PathBuf,
-    project_path: Utf8PathBuf,
-    raw_config: serde_json::Value,
-    files: Vec<Utf8PathBuf>,
-    strict_enabled: bool,
-    pretty: Option<bool>,
-    binary: Utf8PathBuf,
-}
-
-impl BuiltRunInput {
-    fn from(
-        context: &ProjectContext,
-        binary: &Utf8PathBuf,
-        targets: &[Utf8PathBuf],
-        options: &CliOptions,
-        strict_enabled: bool,
-    ) -> Self {
-        Self {
-            cwd: options.cwd.clone(),
-            project_path: context.project_path.clone(),
-            raw_config: context.raw_config.clone(),
-            files: targets.to_vec(),
-            strict_enabled,
-            pretty: options.pretty,
-            binary: binary.clone(),
-        }
-    }
-
-    fn as_input(&self) -> RunInput<'_> {
-        RunInput {
-            cwd: &self.cwd,
-            project_path: &self.project_path,
-            raw_config: &self.raw_config,
-            files: &self.files,
-            strict_enabled: self.strict_enabled,
-            pretty: self.pretty,
-            binary: &self.binary,
-        }
-    }
 }
 
 fn effective_targets(
@@ -296,18 +127,6 @@ fn filter_to_targets(diagnostics: Vec<Diagnostic>, targets: &[Utf8PathBuf]) -> V
 
 fn normalize(path: &Utf8PathBuf) -> String {
     path.as_str().replace('\\', "/").to_ascii_lowercase()
-}
-
-fn render_timings(timer: &Timer) -> String {
-    let entries = timer.entries();
-    if entries.is_empty() {
-        return String::new();
-    }
-    let mut out = String::from("Performance timings (ms):\n");
-    for e in entries {
-        out.push_str(&format!("  {}: {}\n", e.label, e.duration_ms));
-    }
-    out
 }
 
 #[cfg(test)]

@@ -14,9 +14,8 @@ resolved via `optionalDependencies`).
 - Reads `typescript-strict-plugin` config from `compilerOptions.plugins`.
 - Honors `@ts-strict` / `@ts-strict-ignore` pragmas.
 - Supports checking an explicit subset of files or globs.
-- In `--mode exact` (default), runs a baseline pass and a strict pass in
-  parallel and reports only the **net** strict diagnostics.
-- Emits `tsc`-style text output or JSON.
+- Runs `tsgo` once with the 14 strict-family flags enabled, scoped to the
+  selected files, and reports the diagnostics it produces.
 
 ## Why you'd use it
 
@@ -38,7 +37,7 @@ and its errors are filtered out of the output.
 
 ## How it works
 
-In the default `--mode exact`, `tsgo-strict`:
+`tsgo-strict`:
 
 1. **Loads your `tsconfig.json`** (including `extends` chains, relative or
    npm-style like `@tsconfig/node20`), pulls the plugin block out of
@@ -46,20 +45,11 @@ In the default `--mode exact`, `tsgo-strict`:
 2. **Selects the strict subset.** It reads the first 4 KB of each candidate
    file in parallel, checking for pragmas, then applies the plugin
    `paths` / `excludePattern` filter. Pragmas win over config.
-3. **Writes two temporary tsconfigs** that `extend` yours — a *baseline*
-   (strict flags off) and a *strict* one (14 strict-family flags on) — each
-   pinned to the selected files.
-4. **Spawns `tsgo` twice in parallel** (one per config), collecting
-   diagnostics from each.
-5. **Diffs the two diagnostic sets.** Any diagnostic that also appears in the
-   baseline run is subtracted. What remains is the *net* errors that strict
-   mode introduces — the only thing you need to fix.
-6. **Formats and prints** the diff in `tsc`-style text or JSON, sorted for
-   stable output, with an exit code reflecting whether anything remained.
-
-The `--mode fast` variant skips the baseline pass and reports all strict
-diagnostics on the selected subset — useful when you know the subset compiles
-cleanly in non-strict mode (e.g. in pre-commit hooks scoped to changed files).
+3. **Writes a temporary tsconfig** that `extends` yours with the 14
+   strict-family flags enabled and pinned to the selected files.
+4. **Spawns `tsgo`** once against that config and collects diagnostics.
+5. **Prints** the result in `tsc`-style text, sorted for stable output, with
+   an exit code reflecting whether anything remained.
 
 ## Configure strict scope
 
@@ -115,13 +105,6 @@ tsgo-strict [fileOrGlob ...]
 Options:
 
 - `-p, --project <path>` — tsconfig path (default `tsconfig.json`)
-- `--json` — JSON diagnostics
-- `--pretty` / `--no-pretty` — forward pretty output to tsgo
-- `--trace-performance` — per-phase timings on stderr
-- `--strict-plugin <name>` — plugin name (default `typescript-strict-plugin`)
-- `--mode <exact|fast>` — default `exact`
-- `--max-diagnostics <n>` — cap the diagnostic output
-- `--cwd <path>` — override working directory
 
 Exit codes:
 
@@ -132,8 +115,6 @@ Exit codes:
 Environment:
 
 - `TSGO_BINARY` — explicit path to a `tsgo` binary (highest-priority resolver)
-- `TSGO_STRICT_PARALLEL=0` — force sequential baseline+strict passes in
-  `--mode exact` (default runs them concurrently)
 
 ## Programmatic API
 
@@ -143,14 +124,13 @@ import { run } from 'tsgo-strict';
 const result = await run({
   project: 'tsconfig.json',
   subset: ['src/in-scope'],
-  mode: 'exact',
 });
 
 console.log(result.errorCount, result.diagnostics);
 ```
 
-Returns `{ mode, errorCount, exitCode, truncated, diagnostics[], timings[] }`.
-Full type definitions ship with the package.
+Returns `{ errorCount, exitCode, diagnostics[], timings[] }`. Full type
+definitions ship with the package.
 
 ## Development
 

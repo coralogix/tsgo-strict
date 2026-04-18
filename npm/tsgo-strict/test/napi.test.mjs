@@ -8,9 +8,10 @@ import assert from 'node:assert/strict';
 import path from 'node:path';
 import os from 'node:os';
 import { fileURLToPath } from 'node:url';
-import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync, copyFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 
-import { run, resolveNativeAddon, pickPackage } from '../index.js';
+import { run } from '../index.js';
+import { pickPackage, resolveNativeAddon } from '../lib/resolve.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const FIXTURE = path.join(__dirname, 'fixtures', 'basic');
@@ -37,10 +38,8 @@ test('pickPackage returns a supported triple for the current host', () => {
 test('full project run reports strict errors only from in-scope paths', { skip: !addonReady }, async () => {
   const result = await run({ project: path.join(FIXTURE, 'tsconfig.json'), cwd: FIXTURE });
 
-  assert.equal(result.mode, 'exact');
   assert.equal(typeof result.errorCount, 'number');
   assert.ok(result.errorCount > 0, 'expected strict errors from src/in-scope');
-  assert.equal(result.truncated, false);
   assert.equal(result.exitCode, 1);
 
   for (const d of result.diagnostics) {
@@ -65,42 +64,18 @@ test('subset limited to out-of-scope returns no strict errors', { skip: !addonRe
   assert.deepEqual(result.diagnostics, []);
 });
 
-test('fast mode populates per-phase timings', { skip: !addonReady }, async () => {
+test('run populates per-phase timings', { skip: !addonReady }, async () => {
   const result = await run({
     project: path.join(FIXTURE, 'tsconfig.json'),
     cwd: FIXTURE,
-    mode: 'fast',
   });
 
-  assert.equal(result.mode, 'fast');
-  assert.ok(result.timings.length > 0, 'fast mode should still report timings');
+  assert.ok(result.timings.length > 0, 'expected per-phase timings');
   for (const t of result.timings) {
     assert.equal(typeof t.label, 'string');
     assert.equal(typeof t.durationMs, 'number');
     assert.ok(t.durationMs >= 0);
   }
-});
-
-test('maxDiagnostics clips the diagnostics array and flags truncated', { skip: !addonReady }, async () => {
-  const baseline = await run({ project: path.join(FIXTURE, 'tsconfig.json'), cwd: FIXTURE });
-  if (baseline.errorCount < 2) return; // nothing to truncate
-
-  const clipped = await run({
-    project: path.join(FIXTURE, 'tsconfig.json'),
-    cwd: FIXTURE,
-    maxDiagnostics: 1,
-  });
-
-  assert.equal(clipped.errorCount, baseline.errorCount);
-  assert.equal(clipped.diagnostics.length, 1);
-  assert.equal(clipped.truncated, true);
-});
-
-test('invalid mode surfaces as a rejection', { skip: !addonReady }, async () => {
-  await assert.rejects(
-    () => run({ project: path.join(FIXTURE, 'tsconfig.json'), cwd: FIXTURE, mode: 'wild' }),
-    /invalid mode/,
-  );
 });
 
 test('pragmas override plugin path membership', { skip: !addonReady }, async () => {

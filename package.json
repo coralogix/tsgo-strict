@@ -17,8 +17,8 @@
     "fmt:check": "cargo fmt --all -- --check",
     "lint": "cargo clippy --workspace --all-targets -- -D warnings",
     "perf:generate": "node perf-demo/scripts/generate.mjs",
-    "perf:check": "target/release/tsgo-strict --project perf-demo/tsconfig.json --trace-performance",
-    "perf:subset": "target/release/tsgo-strict perf-demo/src/batch-00 --project perf-demo/tsconfig.json --trace-performance"
+    "perf:check": "target/release/tsgo-strict --project perf-demo/tsconfig.json",
+    "perf:subset": "target/release/tsgo-strict perf-demo/src/batch-00 --project perf-demo/tsconfig.json"
   },
   "engines": {
     "node": ">=20"
