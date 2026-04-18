@@ -69,8 +69,12 @@ pub fn write_temp_config(
     let relative_files: Vec<serde_json::Value> = files
         .iter()
         .map(|f| {
+            // `diff_paths` returns `Some("")` when the file path equals the
+            // temp-dir path; tsgo would reject an empty `files[]` entry, so
+            // fall back to the absolute path in that edge case.
             let rel = pathdiff::diff_paths(f.as_std_path(), dir.path())
                 .map(|p| p.to_string_lossy().replace('\\', "/"))
+                .filter(|s| !s.is_empty())
                 .unwrap_or_else(|| f.to_string());
             serde_json::Value::String(rel)
         })

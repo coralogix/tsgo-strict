@@ -2,7 +2,7 @@ use std::fs::File;
 use std::io::Read;
 use std::path::Path;
 
-pub const HEAD_BYTES: usize = 4096;
+pub const HEAD_BYTES: u64 = 4096;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PragmaHint {
@@ -22,15 +22,17 @@ pub enum PragmaHint {
 /// TypeScript source files, ASCII pragmas. Silently returns `None` on any I/O
 /// error, matching the TS `readHead` fallback behavior.
 pub fn detect_pragma(path: &Path) -> PragmaHint {
-    let mut buf = [0u8; HEAD_BYTES];
-    let Ok(mut file) = File::open(path) else {
+    let Ok(file) = File::open(path) else {
         return PragmaHint::None;
     };
-    let read = match file.read(&mut buf) {
-        Ok(n) => n,
-        Err(_) => return PragmaHint::None,
-    };
-    classify_head(&buf[..read])
+    // `read` may return short before EOF; take + read_to_end keeps pulling
+    // until we hit EOF or HEAD_BYTES. Without this a pragma straddling the
+    // last block could be silently missed.
+    let mut buf = Vec::with_capacity(HEAD_BYTES as usize);
+    if file.take(HEAD_BYTES).read_to_end(&mut buf).is_err() {
+        return PragmaHint::None;
+    }
+    classify_head(&buf)
 }
 
 pub fn classify_head(head: &[u8]) -> PragmaHint {

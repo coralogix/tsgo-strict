@@ -83,8 +83,10 @@ fn walk_directories(dirs: &[Utf8PathBuf]) -> Result<Vec<Utf8PathBuf>, Error> {
                 continue;
             }
             let path = entry.into_path();
-            let path_str = path.to_string_lossy();
-            if path_str.contains("/node_modules/") || path_str.contains("/.git/") {
+            if path
+                .components()
+                .any(|c| matches!(c.as_os_str().to_str(), Some("node_modules" | ".git")))
+            {
                 continue;
             }
             let Ok(utf8) = Utf8PathBuf::try_from(path) else {

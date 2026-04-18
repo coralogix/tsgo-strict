@@ -3,8 +3,6 @@ use crate::config::{load_project_context, ProjectContext};
 use crate::diagnostics::{Category, Diagnostic};
 use crate::diff::diff_diagnostics;
 use crate::errors::Error;
-#[allow(unused_imports)]
-use crate::files::ProjectScope;
 use crate::files::{enumerate_project_files, find_strict_candidates, resolve_subset_inputs};
 use crate::format::{format_json_output, format_text_output};
 use crate::options::{CliOptions, Mode};
@@ -209,29 +207,20 @@ fn run_parallel(
     ),
     Error,
 > {
-    let (btx, brx) = std::sync::mpsc::channel();
-    let (stx, srx) = std::sync::mpsc::channel();
+    let baseline_input = BuiltRunInput::from(context, binary, targets, options, false);
+    let strict_input = BuiltRunInput::from(context, binary, targets, options, true);
 
-    std::thread::scope(|scope| -> Result<(), Error> {
-        let baseline_input = BuiltRunInput::from(context, binary, targets, options, false);
-        let strict_input = BuiltRunInput::from(context, binary, targets, options, true);
-
-        let btx2 = btx.clone();
-        scope.spawn(move || {
-            let input = baseline_input.as_input();
-            let _ = btx2.send(run_tsgo(input));
-        });
-        let stx2 = stx.clone();
-        scope.spawn(move || {
-            let input = strict_input.as_input();
-            let _ = stx2.send(run_tsgo(input));
-        });
-        Ok(())
-    })?;
-
-    let baseline = brx.recv().map_err(|e| Error::msg(e.to_string()))??;
-    let strict = srx.recv().map_err(|e| Error::msg(e.to_string()))??;
-    Ok((baseline, strict))
+    std::thread::scope(|scope| {
+        let baseline = scope.spawn(|| run_tsgo(baseline_input.as_input()));
+        let strict = scope.spawn(|| run_tsgo(strict_input.as_input()));
+        let baseline = baseline
+            .join()
+            .map_err(|_| Error::msg("baseline tsgo thread panicked"))??;
+        let strict = strict
+            .join()
+            .map_err(|_| Error::msg("strict tsgo thread panicked"))??;
+        Ok((baseline, strict))
+    })
 }
 
 /// Owned copy of RunInput fields so we can move it into a scoped thread. The

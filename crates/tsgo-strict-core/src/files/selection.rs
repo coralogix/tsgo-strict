@@ -73,20 +73,21 @@ fn is_strict_file(
     exclude_regex: Option<&Regex>,
 ) -> bool {
     let pragma = detect_pragma(file.as_std_path());
-    if pragma == PragmaHint::Ignore {
-        return false;
+    match pragma {
+        PragmaHint::Ignore => return false,
+        PragmaHint::Strict => return true,
+        PragmaHint::None => {}
     }
 
-    let Some(plugin) = plugin_config else {
+    if plugin_config.is_none() {
         return true;
-    };
+    }
 
     let relative = normalize_relative(file, config_dir);
-    let relative_path = std::path::Path::new(&relative);
 
     let in_paths = match path_matchers {
         None => true,
-        Some(matchers) => matchers.is_empty() || matchers.iter().any(|m| m.is_match(relative_path)),
+        Some(matchers) => matchers.is_empty() || matchers.iter().any(|m| m.is_match(&relative)),
     };
 
     let excluded = match exclude_regex {
@@ -94,11 +95,6 @@ fn is_strict_file(
         None => false,
     };
 
-    if pragma == PragmaHint::Strict {
-        return true;
-    }
-
-    let _ = plugin;
     in_paths && !excluded
 }
 
