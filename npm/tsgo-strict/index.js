@@ -1,0 +1,49 @@
+'use strict';
+
+const { familySync, GLIBC, MUSL } = require('detect-libc');
+
+function pickPackage() {
+  const platform = process.platform;
+  const arch = process.arch;
+  const family = platform === 'linux' ? familySync() : null;
+
+  if (platform === 'linux' && arch === 'x64') {
+    return family === MUSL ? '@tsgo-strict/linux-x64-musl' : '@tsgo-strict/linux-x64-gnu';
+  }
+  if (platform === 'linux' && arch === 'arm64') {
+    if (family === MUSL) return null;
+    return '@tsgo-strict/linux-arm64-gnu';
+  }
+  if (platform === 'darwin' && arch === 'x64') return '@tsgo-strict/darwin-x64';
+  if (platform === 'darwin' && arch === 'arm64') return '@tsgo-strict/darwin-arm64';
+  if (platform === 'win32' && arch === 'x64') return '@tsgo-strict/win32-x64-msvc';
+  return null;
+}
+
+function resolveBinary() {
+  const name = pickPackage();
+  if (!name) {
+    throw new Error(
+      `tsgo-strict: unsupported platform ${process.platform}-${process.arch} (glibc family: ${familySync() || 'n/a'})`
+    );
+  }
+  let packagePath;
+  try {
+    packagePath = require.resolve(`${name}/package.json`);
+  } catch (err) {
+    throw new Error(
+      `tsgo-strict: expected platform package '${name}' is not installed. ` +
+        `This usually means 'optionalDependencies' was not installed (check npm/pnpm/yarn install logs).`
+    );
+  }
+  const pkg = require(packagePath);
+  const binField = pkg.bin;
+  const relative = typeof binField === 'string' ? binField : binField && binField['tsgo-strict'];
+  if (!relative) {
+    throw new Error(`tsgo-strict: platform package '${name}' has no bin entry`);
+  }
+  const path = require('node:path');
+  return path.resolve(path.dirname(packagePath), relative);
+}
+
+module.exports = { resolveBinary, pickPackage };

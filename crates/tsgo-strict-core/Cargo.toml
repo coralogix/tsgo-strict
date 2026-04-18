@@ -1,0 +1,24 @@
+[package]
+name = "tsgo-strict-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+thiserror.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+jsonc-parser.workspace = true
+ignore.workspace = true
+globset.workspace = true
+rayon.workspace = true
+regex.workspace = true
+once_cell.workspace = true
+tempfile.workspace = true
+which.workspace = true
+strip-ansi-escapes.workspace = true
+camino.workspace = true
