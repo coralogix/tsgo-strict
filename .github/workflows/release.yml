@@ -288,6 +288,10 @@ jobs:
 
       # Commit + tag + push only happens after publish succeeds, so a failed
       # publish leaves origin untouched.
+      #
+      # After tagging, restore the launcher's optionalDependencies back to
+      # `workspace:*` so the lockfile stays valid for local development.
+      # The stamped concrete versions only matter inside the published tarball.
       - name: Commit, tag, and push
         if: '!inputs.dry_run'
         shell: bash
@@ -298,6 +302,23 @@ jobs:
           git add npm/tsgo-strict/package.json npm/platforms/*/package.json
           git commit -m "chore(release): ${TAG}"
           git tag -a "${TAG}" -m "Release ${TAG}"
+
+          # Restore workspace:* deps so the lockfile stays in sync
+          node -e "
+            const fs = require('fs');
+            const p = 'npm/tsgo-strict/package.json';
+            const pkg = JSON.parse(fs.readFileSync(p, 'utf8'));
+            if (pkg.optionalDependencies) {
+              for (const [name, spec] of Object.entries(pkg.optionalDependencies)) {
+                if (name.startsWith('@tsgo-strict/')) {
+                  pkg.optionalDependencies[name] = 'workspace:*';
+                }
+              }
+            }
+            fs.writeFileSync(p, JSON.stringify(pkg, null, 2) + '\n');
+          "
+          git add npm/tsgo-strict/package.json
+          git commit -m "chore: restore workspace:* deps after release"
           git push origin "HEAD:${GITHUB_REF_NAME}" --follow-tags
 
       - name: Create GitHub Release
