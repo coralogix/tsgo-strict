@@ -14,13 +14,9 @@
     "type": "git",
     "url": "git+https://github.com/ashley-hunter/tsgo-strict.git"
   },
-  "bin": {
-    "tsgo-strict": "bin/tsgo-strict.js"
-  },
   "main": "index.js",
   "types": "index.d.ts",
   "files": [
-    "bin",
     "lib",
     "index.js",
     "index.d.ts",

@@ -7,6 +7,9 @@
     "type": "git",
     "url": "git+https://github.com/ashley-hunter/tsgo-strict.git"
   },
+  "bin": {
+    "tsgo-strict": "bin/tsgo-strict"
+  },
   "files": [
     "bin/tsgo-strict",
     "README.md"

@@ -1,7 +1,8 @@
 'use strict';
 
-// Internal platform-binary + N-API addon resolver. Not part of the public
-// package surface; the bin launcher and `index.js` import from here directly.
+// Internal N-API addon resolver. Not part of the public package surface;
+// `index.js` imports from here directly. The CLI is resolved by npm
+// itself via each platform package's `bin` entry — no JS shim involved.
 
 const path = require('node:path');
 const { familySync, MUSL } = require('detect-libc');
@@ -42,21 +43,10 @@ function platformPackageJson() {
   return { name, packagePath, pkg: require(packagePath) };
 }
 
-function resolveBinary() {
-  // Don't rely on the platform package's `bin` field: declaring it there
-  // collides with the same key on this launcher and causes npm to drop the
-  // `.bin/tsgo-strict` symlink on install. Hard-code the staged path
-  // instead — it matches what the release workflow writes into
-  // `npm/platforms/<triple>/bin/`.
-  const { packagePath } = platformPackageJson();
-  const relative = process.platform === 'win32' ? 'bin/tsgo-strict.exe' : 'bin/tsgo-strict';
-  return path.resolve(path.dirname(packagePath), relative);
-}
-
 function resolveNativeAddon() {
   const { pkg, packagePath } = platformPackageJson();
   const relative = pkg.main || 'native/tsgo-strict.node';
   return path.resolve(path.dirname(packagePath), relative);
 }
 
-module.exports = { pickPackage, resolveBinary, resolveNativeAddon };
+module.exports = { pickPackage, resolveNativeAddon };
