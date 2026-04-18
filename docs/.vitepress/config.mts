@@ -1,20 +1,20 @@
 import { defineConfig } from 'vitepress';
 
-const GITHUB = 'https://github.com/ashley-hunter/tsgo-strict-plugin';
-const SITE_URL = 'https://ashley-hunter.github.io/tsgo-strict-plugin/';
+const GITHUB = 'https://github.com/ashley-hunter/tsgo-strict';
+const SITE_URL = 'https://ashley-hunter.github.io/tsgo-strict/';
 const DESCRIPTION =
   'Strict TypeScript. One file at a time. A fast, Rust-powered strict-only type checker built on Microsoft\'s tsgo.';
 
 export default defineConfig({
   title: 'tsgo-strict',
   description: DESCRIPTION,
-  base: '/tsgo-strict-plugin/',
+  base: '/tsgo-strict/',
   lang: 'en-US',
   cleanUrls: true,
   lastUpdated: true,
   sitemap: { hostname: SITE_URL },
   head: [
-    ['link', { rel: 'icon', type: 'image/svg+xml', href: '/tsgo-strict-plugin/logo.svg' }],
+    ['link', { rel: 'icon', type: 'image/svg+xml', href: '/tsgo-strict/logo.svg' }],
     ['meta', { name: 'theme-color', content: '#3178c6' }],
     ['meta', { property: 'og:type', content: 'website' }],
     ['meta', { property: 'og:title', content: 'tsgo-strict — Strict TypeScript, one file at a time' }],

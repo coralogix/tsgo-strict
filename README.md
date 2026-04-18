@@ -1,6 +1,6 @@
 # tsgo-strict
 
-📖 **Docs:** https://ashley-hunter.github.io/tsgo-strict-plugin/
+📖 **Docs:** https://ashley-hunter.github.io/tsgo-strict/
 
 `tsgo-strict` is a fast, strict-only TypeScript checker. It wraps Microsoft's
 `tsgo` compiler (`@typescript/native-preview`) and emits only the diagnostics

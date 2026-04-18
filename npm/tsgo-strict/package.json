@@ -12,7 +12,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/ashley-hunter/tsgo-strict-plugin.git"
+    "url": "git+https://github.com/ashley-hunter/tsgo-strict.git"
   },
   "bin": {
     "tsgo-strict": "bin/tsgo-strict.js"

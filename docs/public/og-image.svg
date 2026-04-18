@@ -56,5 +56,5 @@
   <!-- Footer url -->
   <text x="80" y="590" fill="#7d8aa6"
         font-family="ui-monospace, SFMono-Regular, Menlo, monospace"
-        font-size="24">github.com/ashley-hunter/tsgo-strict-plugin</text>
+        font-size="24">github.com/ashley-hunter/tsgo-strict</text>
 </svg>

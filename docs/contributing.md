@@ -3,10 +3,10 @@
 Contributions are welcome! The full contributor guide lives in the repo
 alongside the code:
 
-- **[CONTRIBUTING.md](https://github.com/ashley-hunter/tsgo-strict-plugin/blob/main/CONTRIBUTING.md)** — dev setup, Rust toolchain, running tests, coding style.
-- **[CODE_OF_CONDUCT.md](https://github.com/ashley-hunter/tsgo-strict-plugin/blob/main/CODE_OF_CONDUCT.md)** — expectations for how we work together.
-- **[SECURITY.md](https://github.com/ashley-hunter/tsgo-strict-plugin/blob/main/SECURITY.md)** — reporting security issues responsibly.
-- **[SUPPORT.md](https://github.com/ashley-hunter/tsgo-strict-plugin/blob/main/SUPPORT.md)** — where to ask for help.
+- **[CONTRIBUTING.md](https://github.com/ashley-hunter/tsgo-strict/blob/main/CONTRIBUTING.md)** — dev setup, Rust toolchain, running tests, coding style.
+- **[CODE_OF_CONDUCT.md](https://github.com/ashley-hunter/tsgo-strict/blob/main/CODE_OF_CONDUCT.md)** — expectations for how we work together.
+- **[SECURITY.md](https://github.com/ashley-hunter/tsgo-strict/blob/main/SECURITY.md)** — reporting security issues responsibly.
+- **[SUPPORT.md](https://github.com/ashley-hunter/tsgo-strict/blob/main/SUPPORT.md)** — where to ask for help.
 
 ## Quick dev loop
 
@@ -40,7 +40,7 @@ Any push to `main` that touches `docs/` deploys automatically via
 ## Reporting issues
 
 Please file issues on
-[GitHub Issues](https://github.com/ashley-hunter/tsgo-strict-plugin/issues)
+[GitHub Issues](https://github.com/ashley-hunter/tsgo-strict/issues)
 with:
 
 - tsgo-strict version
