@@ -239,6 +239,21 @@ jobs:
             [[ -d "${d}native" ]] && ls -la "${d}native"
           done
 
+      # actions/upload-artifact@v4 strips the executable bit, so without
+      # this step the binary inside the platform tarball would be 0644
+      # and consumers hit EACCES when the launcher spawns it. Restore
+      # 0755 here so `npm publish` records it into the tarball.
+      - name: Mark platform binaries executable
+        shell: bash
+        run: |
+          set -euo pipefail
+          for f in npm/platforms/*/bin/tsgo-strict npm/platforms/*/bin/tsgo-strict.exe; do
+            if [[ -f "$f" ]]; then
+              chmod 0755 "$f"
+              echo "chmod +x $f"
+            fi
+          done
+
       # Stamp the resolved version into the launcher + all platform
       # package.json files, and rewrite the launcher's `workspace:*`
       # optionalDependencies to concrete pins. `npm publish` does not resolve
