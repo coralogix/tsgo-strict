@@ -62,32 +62,17 @@ fn format_line(d: &Diagnostic, cwd: &Utf8PathBuf) -> String {
 }
 
 fn make_relative(file: &Utf8PathBuf, cwd: &Utf8PathBuf) -> String {
-    match pathdiff(file, cwd) {
-        Some(rel) if !rel.is_empty() && !rel.starts_with("..") => rel,
-        _ => file.to_string(),
+    match pathdiff::diff_paths(file.as_std_path(), cwd.as_std_path()) {
+        Some(rel) => {
+            let rel = rel.to_string_lossy().replace('\\', "/");
+            if rel.is_empty() || rel.starts_with("..") {
+                file.to_string()
+            } else {
+                rel
+            }
+        }
+        None => file.to_string(),
     }
-}
-
-fn pathdiff(path: &Utf8PathBuf, base: &Utf8PathBuf) -> Option<String> {
-    let path_components: Vec<_> = path.components().collect();
-    let base_components: Vec<_> = base.components().collect();
-
-    let mut i = 0;
-    while i < path_components.len()
-        && i < base_components.len()
-        && path_components[i] == base_components[i]
-    {
-        i += 1;
-    }
-
-    let mut out: Vec<String> = Vec::new();
-    for _ in i..base_components.len() {
-        out.push("..".to_string());
-    }
-    for c in &path_components[i..] {
-        out.push(c.as_str().to_string());
-    }
-    Some(out.join("/"))
 }
 
 fn diagnostic_cmp(a: &Diagnostic, b: &Diagnostic) -> Ordering {

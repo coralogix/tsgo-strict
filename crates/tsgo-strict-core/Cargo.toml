@@ -23,6 +23,7 @@ tempfile.workspace = true
 which.workspace = true
 strip-ansi-escapes.workspace = true
 camino.workspace = true
+pathdiff.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true

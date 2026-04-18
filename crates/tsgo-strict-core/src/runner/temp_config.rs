@@ -1,6 +1,5 @@
 use crate::errors::Error;
 use camino::{Utf8Path, Utf8PathBuf};
-use std::path::Path;
 use tempfile::TempDir;
 
 /// 14 flags in the "strict family" — the full set tsc/tsgo treats as strict
@@ -70,8 +69,10 @@ pub fn write_temp_config(
     let relative_files: Vec<serde_json::Value> = files
         .iter()
         .map(|f| {
-            let rel = relative_to(f.as_std_path(), dir.path());
-            serde_json::Value::String(rel.replace('\\', "/"))
+            let rel = pathdiff::diff_paths(f.as_std_path(), dir.path())
+                .map(|p| p.to_string_lossy().replace('\\', "/"))
+                .unwrap_or_else(|| f.to_string());
+            serde_json::Value::String(rel)
         })
         .collect();
 
@@ -98,58 +99,4 @@ pub fn write_temp_config(
         path: Utf8PathBuf::try_from(config_path).unwrap(),
         _dir: dir,
     })
-}
-
-fn relative_to(path: &Path, base: &Path) -> String {
-    use std::path::Component;
-
-    let abs = path.to_path_buf();
-    let base = base.to_path_buf();
-    let mut path_iter = abs.components();
-    let mut base_iter = base.components();
-    let mut out: Vec<String> = Vec::new();
-
-    loop {
-        match (path_iter.next(), base_iter.next()) {
-            (Some(a), Some(b)) if a == b => continue,
-            (Some(a), Some(_)) => {
-                out.push("..".to_string());
-                push_component(&mut out, a);
-                for _ in base_iter.by_ref() {
-                    out.insert(0, "..".to_string());
-                }
-                for c in path_iter.by_ref() {
-                    push_component(&mut out, c);
-                }
-                break;
-            }
-            (Some(a), None) => {
-                push_component(&mut out, a);
-                for c in path_iter.by_ref() {
-                    push_component(&mut out, c);
-                }
-                break;
-            }
-            (None, Some(_)) => {
-                out.insert(0, "..".to_string());
-                for _ in base_iter.by_ref() {
-                    out.insert(0, "..".to_string());
-                }
-                break;
-            }
-            (None, None) => break,
-        }
-    }
-
-    fn push_component(out: &mut Vec<String>, component: Component<'_>) {
-        match component {
-            Component::Normal(os) => out.push(os.to_string_lossy().into_owned()),
-            Component::ParentDir => out.push("..".to_string()),
-            Component::CurDir => {}
-            Component::RootDir => out.push("/".to_string()),
-            Component::Prefix(p) => out.push(p.as_os_str().to_string_lossy().into_owned()),
-        }
-    }
-
-    out.join(std::path::MAIN_SEPARATOR_STR)
 }

@@ -144,60 +144,7 @@ fn compile_exclude_regex(
 }
 
 fn normalize_relative(file: &Utf8Path, base: &Utf8PathBuf) -> String {
-    let relative = pathdiff(file, base).unwrap_or_else(|| file.to_string());
-    relative.replace('\\', "/")
-}
-
-fn pathdiff(path: &Utf8Path, base: &Utf8PathBuf) -> Option<String> {
-    use std::path::Component;
-    let path = path.as_std_path();
-    let base = base.as_std_path();
-
-    let mut path_components = path.components();
-    let mut base_components = base.components();
-    let mut out: Vec<String> = Vec::new();
-
-    loop {
-        match (path_components.next(), base_components.next()) {
-            (Some(a), Some(b)) if a == b => continue,
-            (Some(a), Some(_)) => {
-                out.push("..".to_string());
-                push_component(&mut out, a);
-                for _ in base_components.by_ref() {
-                    out.insert(0, "..".to_string());
-                }
-                for c in path_components.by_ref() {
-                    push_component(&mut out, c);
-                }
-                break;
-            }
-            (Some(a), None) => {
-                push_component(&mut out, a);
-                for c in path_components.by_ref() {
-                    push_component(&mut out, c);
-                }
-                break;
-            }
-            (None, Some(_)) => {
-                out.insert(0, "..".to_string());
-                for _ in base_components.by_ref() {
-                    out.insert(0, "..".to_string());
-                }
-                break;
-            }
-            (None, None) => break,
-        }
-    }
-
-    fn push_component(out: &mut Vec<String>, component: Component<'_>) {
-        match component {
-            Component::Normal(os) => out.push(os.to_string_lossy().into_owned()),
-            Component::ParentDir => out.push("..".to_string()),
-            Component::CurDir => {}
-            Component::RootDir => out.push("/".to_string()),
-            Component::Prefix(p) => out.push(p.as_os_str().to_string_lossy().into_owned()),
-        }
-    }
-
-    Some(out.join("/"))
+    pathdiff::diff_paths(file.as_std_path(), base.as_std_path())
+        .map(|p| p.to_string_lossy().replace('\\', "/"))
+        .unwrap_or_else(|| file.to_string())
 }
