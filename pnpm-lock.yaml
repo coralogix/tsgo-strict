@@ -17,8 +17,6 @@ importers:
 
   npm/platforms/darwin-arm64: {}
 
-  npm/platforms/darwin-x64: {}
-
   npm/platforms/linux-arm64-gnu: {}
 
   npm/platforms/linux-x64-gnu: {}
@@ -39,9 +37,6 @@ importers:
       '@tsgo-strict/darwin-arm64':
         specifier: workspace:*
         version: link:../platforms/darwin-arm64
-      '@tsgo-strict/darwin-x64':
-        specifier: workspace:*
-        version: link:../platforms/darwin-x64
       '@tsgo-strict/linux-arm64-gnu':
         specifier: workspace:*
         version: link:../platforms/linux-arm64-gnu
