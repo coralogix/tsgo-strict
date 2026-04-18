@@ -1,14 +1,10 @@
 name: Docs
 
 on:
+  # Deploy docs on release tags and allow manual trigger
   push:
-    branches:
-      - main
-    paths:
-      - 'docs/**'
-      - 'package.json'
-      - 'pnpm-lock.yaml'
-      - '.github/workflows/docs.yml'
+    tags:
+      - 'v*'
   workflow_dispatch:
 
 permissions:
@@ -55,7 +51,6 @@ jobs:
 
   deploy:
     needs: build
-    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment:
       name: github-pages

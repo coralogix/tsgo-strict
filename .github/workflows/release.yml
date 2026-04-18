@@ -299,6 +299,16 @@ jobs:
           git tag -a "${TAG}" -m "Release ${TAG}"
           git push origin "HEAD:${GITHUB_REF_NAME}" --follow-tags
 
+      - name: Create GitHub Release
+        if: '!inputs.dry_run'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${TAG}" \
+            --title "${TAG}" \
+            --generate-notes
+
       - name: Release summary
         if: always()
         shell: bash
@@ -310,6 +320,7 @@ jobs:
               echo "- Mode: **dry-run** (no npm writes, no git push)"
             else
               echo "- Published \`tsgo-strict@${VERSION}\` and 6 \`@tsgo-strict/*@${VERSION}\` platform packages"
+              echo "- Created GitHub Release \`${TAG}\`"
               echo "- Committed version bump and pushed tag \`${TAG}\` to \`${GITHUB_REF_NAME}\`"
             fi
           } >> "$GITHUB_STEP_SUMMARY"
