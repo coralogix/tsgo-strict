@@ -21,6 +21,7 @@
   "types": "index.d.ts",
   "files": [
     "bin",
+    "lib",
     "index.js",
     "index.d.ts",
     "README.md",
