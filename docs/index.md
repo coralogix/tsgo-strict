@@ -25,22 +25,22 @@ hero:
 features:
   - icon: 🎯
     title: Strict, scoped precisely
-    details: Flip <code>"strict": true</code> only for the files, directories, or globs you've opted in — everything else stays on your normal tsconfig.
+    details: 'Flip <code>"strict": true</code> only for the files, directories, or globs you''ve opted in — everything else stays on your normal tsconfig.'
   - icon: 🧭
     title: Pragma-driven overrides
-    details: Drop a <code>// @ts-strict</code> or <code>// @ts-strict-ignore</code> at the top of a file and it wins over your plugin config. Migrate at your own pace.
+    details: 'Drop a <code>// @ts-strict</code> or <code>// @ts-strict-ignore</code> at the top of a file and it wins over your plugin config. Migrate at your own pace.'
   - icon: ⚡
     title: Rust-fast, tsgo-powered
-    details: Config parsing in under a millisecond and parallel pragma scanning via rayon. <strong>2.48× faster</strong> end-to-end than the TS implementation.
+    details: 'Config parsing in under a millisecond and parallel pragma scanning via rayon. <strong>2.48× faster</strong> end-to-end than the TS implementation.'
   - icon: 🔌
     title: Zero-config plugin block
-    details: Reuses <code>typescript-strict-plugin</code>'s config shape in <code>compilerOptions.plugins</code>. No extra config file, no custom runner.
+    details: 'Reuses <code>typescript-strict-plugin</code>''s config shape in <code>compilerOptions.plugins</code>. No extra config file, no custom runner.'
   - icon: 🛠️
     title: CLI + programmatic API
-    details: Use it from your scripts, your CI, or a Node process via the <code>run()</code> API that returns structured diagnostics and per-phase timings.
+    details: 'Use it from your scripts, your CI, or a Node process via the <code>run()</code> API that returns structured diagnostics and per-phase timings.'
   - icon: 📦
     title: Prebuilt native binaries
-    details: Ships as an npm launcher with per-platform packages — Linux (gnu/musl, x64/arm64), macOS (x64/arm64), Windows x64. No build step on install.
+    details: 'Ships as an npm launcher with per-platform packages — Linux (gnu/musl, x64/arm64), macOS (x64/arm64), Windows x64. No build step on install.'
 ---
 
 <div class="tss-stats">
