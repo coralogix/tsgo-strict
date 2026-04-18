@@ -211,11 +211,7 @@ fn path_to_posix(s: &str) -> String {
 }
 
 fn is_absolute_posix(s: &str) -> bool {
-    s.starts_with('/')
-        || s.as_bytes()
-            .get(1)
-            .map(|&b| b == b':')
-            .unwrap_or(false)
+    s.starts_with('/') || s.as_bytes().get(1).map(|&b| b == b':').unwrap_or(false)
 }
 
 #[cfg(test)]
@@ -277,7 +273,10 @@ mod tests {
     fn path_entries_get_normalized_like_path_resolve() {
         let base = Utf8PathBuf::from("/proj");
         let prefixes = compile_path_prefixes(
-            Some(&cfg(Some(vec!["./src/a", "src/b/", "./src/./c/../c"]), None)),
+            Some(&cfg(
+                Some(vec!["./src/a", "src/b/", "./src/./c/../c"]),
+                None,
+            )),
             &base,
         )
         .unwrap();

@@ -97,3 +97,28 @@ in your own tsconfig.
 
 Everything else in your tsconfig (paths, lib, jsx, target, moduleResolution,
 etc.) is preserved.
+
+### Opting out of a specific strict sub-flag
+
+`tsgo-strict` doesn't expose a plugin option for disabling individual
+strict sub-flags, and it doesn't need to: the temp tsconfig it emits
+`extends` yours, so any sub-flag you set **explicitly** in your own
+`compilerOptions` still wins. TypeScript evaluates each strictness flag
+independently, and an explicit setting overrides the `strict: true`
+implication.
+
+For example, to keep `strict` on but relax `strictPropertyInitialization`:
+
+```jsonc
+{
+  "compilerOptions": {
+    "strictPropertyInitialization": false,
+    "plugins": [
+      { "name": "typescript-strict-plugin", "paths": ["./src/strict"] }
+    ]
+  }
+}
+```
+
+Because the loose files are never strict-checked by `tsgo-strict`, this
+setting only affects the strict subset in practice.
