@@ -48,15 +48,7 @@ pub fn run_tsgo(input: RunInput<'_>) -> Result<TsgoRunResult, Error> {
     let exit_code = output.status.code().unwrap_or(1);
     let duration_ms = started.elapsed().as_millis();
 
-    // tsgo emits diagnostic paths relative to the config file, not the
-    // spawn cwd. Since the config file lives in a temp directory, we must
-    // resolve relative paths against the temp config's parent directory.
-    let config_dir = temp
-        .path
-        .parent()
-        .map(|p| p.to_path_buf())
-        .unwrap_or_else(|| input.cwd.clone());
-    let diagnostics = parse_diagnostics(&stdout, &stderr, &config_dir);
+    let diagnostics = parse_diagnostics(&stdout, &stderr, input.cwd);
 
     Ok(TsgoRunResult {
         diagnostics,

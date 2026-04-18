@@ -112,8 +112,7 @@ fn resolve_relative(cwd: &Utf8PathBuf, file: &str) -> Utf8PathBuf {
     if candidate.is_absolute() {
         let normalized = normalize_path(candidate);
         if normalized.exists() {
-            return Utf8PathBuf::try_from(normalized)
-                .unwrap_or_else(|_| Utf8PathBuf::from(file));
+            return Utf8PathBuf::try_from(normalized).unwrap_or_else(|_| Utf8PathBuf::from(file));
         }
     }
 
