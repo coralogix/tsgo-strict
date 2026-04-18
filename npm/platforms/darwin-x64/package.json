@@ -1,0 +1,21 @@
+{
+  "name": "@tsgo-strict/darwin-x64",
+  "version": "0.1.0",
+  "description": "Native tsgo-strict binary for macOS x64",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ashley-hunter/tsgo-strict-plugin.git"
+  },
+  "main": "native/tsgo-strict.node",
+  "bin": {
+    "tsgo-strict": "bin/tsgo-strict"
+  },
+  "files": [
+    "bin/tsgo-strict",
+    "native/tsgo-strict.node",
+    "README.md"
+  ],
+  "os": ["darwin"],
+  "cpu": ["x64"]
+}

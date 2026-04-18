@@ -4,26 +4,26 @@ Thanks for contributing to `tsgo-strict`.
 
 ## Development setup
 
-1. Install Node.js 20+.
-2. Install dependencies: `pnpm install`.
-3. Run checks locally:
-   - `pnpm typecheck`
-   - `pnpm lint`
-   - `pnpm format`
-   - `pnpm test`
-   - `pnpm build`
+1. Install a recent Rust toolchain (1.75+) — the workspace pins `stable` in `rust-toolchain.toml`.
+2. Install Node.js 20+ (only needed to exercise the npm launcher and N-API integration tests).
+3. Install pnpm (`corepack enable` or `npm i -g pnpm`).
+
+## Local checks
+
+- `cargo fmt --all -- --check` — formatting
+- `cargo clippy --workspace --all-targets -- -D warnings` — lint
+- `cargo test --workspace` — unit tests
+- `pnpm test:node` — builds the N-API addon for the current host, stages it
+  into the matching platform package, and runs the Node integration suite.
+- `cargo build --release` — optimized CLI for local benchmarking
 
 ## Pull requests
 
 1. Keep PRs focused and small.
-2. Add or update tests for behavior changes.
-3. Ensure `pnpm prepush:check` passes before opening/updating a PR.
+2. Add or update tests for behavior changes — both `cargo test` and
+   `pnpm test:node` should stay green.
+3. Run `cargo fmt --all` and `cargo clippy` before opening a PR.
 4. Update `README.md` when user-facing behavior changes.
-
-## Commit quality
-
-- Prefer descriptive commit messages that explain intent and impact.
-- Keep generated files out of commits unless required for release artifacts.
 
 ## Reporting bugs and requesting features
 

@@ -1,7 +1,8 @@
 node_modules
-dist
 coverage
 *.log
 .tsgo-strict-tmp
 
-rust-sibling/target
+target
+npm/platforms/*/bin
+npm/platforms/*/native

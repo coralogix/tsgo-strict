@@ -1,0 +1,18 @@
+[package]
+name = "tsgo-strict"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description.workspace = true
+
+[[bin]]
+name = "tsgo-strict"
+path = "src/main.rs"
+
+[dependencies]
+tsgo-strict-core = { path = "../tsgo-strict-core" }
+anyhow.workspace = true
+clap.workspace = true
+camino.workspace = true

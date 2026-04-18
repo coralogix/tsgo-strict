@@ -1,0 +1,22 @@
+{
+  "name": "@tsgo-strict/linux-x64-musl",
+  "version": "0.1.0",
+  "description": "Native tsgo-strict binary for Linux x64 (musl)",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ashley-hunter/tsgo-strict-plugin.git"
+  },
+  "main": "native/tsgo-strict.node",
+  "bin": {
+    "tsgo-strict": "bin/tsgo-strict"
+  },
+  "files": [
+    "bin/tsgo-strict",
+    "native/tsgo-strict.node",
+    "README.md"
+  ],
+  "os": ["linux"],
+  "cpu": ["x64"],
+  "libc": ["musl"]
+}
