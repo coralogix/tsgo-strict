@@ -16,8 +16,16 @@
   },
   "main": "index.js",
   "types": "index.d.ts",
+  "bin": {
+    "tsgo-strict": "bin/tsgo-strict"
+  },
+  "scripts": {
+    "postinstall": "node install.js"
+  },
   "files": [
     "lib",
+    "bin",
+    "install.js",
     "index.js",
     "index.d.ts",
     "README.md",

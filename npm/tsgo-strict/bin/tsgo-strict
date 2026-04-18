@@ -1,0 +1,33 @@
+#!/usr/bin/env node
+'use strict';
+
+// JS launcher shim. Follows the esbuild pattern: on *nix, `install.js` may
+// hard-link the platform-specific native binary over this file during
+// postinstall, turning this path into the native executable (one less
+// Node startup per invocation). On Windows, yarn, or when postinstall is
+// skipped, this shim stays in place and spawns the binary each time.
+
+const fs = require('node:fs');
+const { spawnSync } = require('node:child_process');
+const { resolveBinary } = require('../lib/resolve');
+
+try {
+  const binary = resolveBinary();
+  // GitHub Actions' upload-artifact strips the executable bit, so the
+  // published platform tarball can ship the binary at 0644. Ensure it's
+  // runnable before we spawn it. Best-effort: swallow chmod errors so we
+  // don't mask the real spawn error.
+  try {
+    const st = fs.statSync(binary);
+    if ((st.mode & 0o111) === 0) fs.chmodSync(binary, 0o755);
+  } catch {}
+  const result = spawnSync(binary, process.argv.slice(2), { stdio: 'inherit' });
+  if (result.error) {
+    process.stderr.write(`tsgo-strict: failed to launch native binary: ${result.error.message}\n`);
+    process.exit(2);
+  }
+  process.exit(result.status == null ? 2 : result.status);
+} catch (err) {
+  process.stderr.write(`${err.message}\n`);
+  process.exit(2);
+}
