@@ -6,3 +6,6 @@ coverage
 target
 npm/platforms/*/bin
 npm/platforms/*/native
+
+docs/.vitepress/cache
+docs/.vitepress/dist
