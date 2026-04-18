@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/tsgo-strict", "crates/tsgo-strict-core"]
+members = ["crates/tsgo-strict", "crates/tsgo-strict-core", "crates/tsgo-strict-napi"]
 
 [workspace.package]
 version = "0.1.0"

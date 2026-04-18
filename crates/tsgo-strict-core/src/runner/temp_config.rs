@@ -3,8 +3,8 @@ use camino::{Utf8Path, Utf8PathBuf};
 use std::path::Path;
 use tempfile::TempDir;
 
-/// 14 flags in the "strict family". Mirrors STRICT_FAMILY_FLAGS in
-/// src/runner/tsgoRunner.ts:7-22.
+/// 14 flags in the "strict family" — the full set tsc/tsgo treats as strict
+/// when `strict: true` is enabled, plus the four flags it does not bundle.
 pub const STRICT_FAMILY_FLAGS: &[&str] = &[
     "strict",
     "strictBindCallApply",
@@ -41,9 +41,19 @@ pub fn write_temp_config(
     let dir = tempfile::Builder::new()
         .prefix("run-")
         .tempdir_in(&parent)
-        .map_err(|e| Error::msg(format!("cannot create temp dir in {}: {}", parent.display(), e)))?;
+        .map_err(|e| {
+            Error::msg(format!(
+                "cannot create temp dir in {}: {}",
+                parent.display(),
+                e
+            ))
+        })?;
 
-    let filename = if strict_enabled { "strict.json" } else { "baseline.json" };
+    let filename = if strict_enabled {
+        "strict.json"
+    } else {
+        "baseline.json"
+    };
     let config_path = dir.path().join(filename);
 
     let mut compiler_options = raw_config
@@ -74,7 +84,10 @@ pub fn write_temp_config(
         "compilerOptions".to_string(),
         serde_json::Value::Object(compiler_options),
     );
-    root.insert("files".to_string(), serde_json::Value::Array(relative_files));
+    root.insert(
+        "files".to_string(),
+        serde_json::Value::Array(relative_files),
+    );
 
     let body = serde_json::to_string_pretty(&serde_json::Value::Object(root))
         .map_err(|e| Error::msg(format!("failed to serialize temp tsconfig: {}", e)))?;

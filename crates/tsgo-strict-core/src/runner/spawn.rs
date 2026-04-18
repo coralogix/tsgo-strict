@@ -35,28 +35,13 @@ pub fn run_tsgo(input: RunInput<'_>) -> Result<TsgoRunResult, Error> {
     )?;
 
     let started = Instant::now();
-    // Default to --pretty false so tsgo emits one-diagnostic-per-line output
-    // without code-frame snippets or the "Found N errors in M files" summary
-    // block — both of which would be mis-parsed as continuation lines of the
-    // preceding diagnostic's message. Callers who opt into --pretty explicitly
-    // accept that tradeoff.
-    let pretty = if input.pretty == Some(true) {
-        "true"
-    } else {
-        "false"
-    };
+    let pretty = child_pretty_arg(input.pretty);
 
     let mut cmd = Command::new(input.binary.as_std_path());
-    cmd.args([
-        "--noEmit",
-        "--pretty",
-        pretty,
-        "-p",
-        temp.path.as_str(),
-    ])
-    .current_dir(input.cwd.as_std_path())
-    .env("NO_COLOR", "1")
-    .env("FORCE_COLOR", "0");
+    cmd.args(["--noEmit", "--pretty", pretty, "-p", temp.path.as_str()])
+        .current_dir(input.cwd.as_std_path())
+        .env("NO_COLOR", "1")
+        .env("FORCE_COLOR", "0");
 
     let output = cmd
         .output()
@@ -76,4 +61,38 @@ pub fn run_tsgo(input: RunInput<'_>) -> Result<TsgoRunResult, Error> {
         exit_code,
         duration_ms,
     })
+}
+
+/// Default tsgo's `--pretty` to `false` so its output is one diagnostic per
+/// line — no code-frame snippets, no "Found N errors in M files" summary
+/// block. Those lines would be mis-parsed as continuation text of the
+/// preceding diagnostic, corrupting diff keys in `--mode exact` and pulling
+/// non-strict-only errors into the final report. Callers can explicitly pass
+/// `--pretty` to accept that tradeoff.
+fn child_pretty_arg(opt: Option<bool>) -> &'static str {
+    if opt == Some(true) {
+        "true"
+    } else {
+        "false"
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn pretty_defaults_to_false_when_unspecified() {
+        assert_eq!(child_pretty_arg(None), "false");
+    }
+
+    #[test]
+    fn pretty_false_stays_false() {
+        assert_eq!(child_pretty_arg(Some(false)), "false");
+    }
+
+    #[test]
+    fn pretty_true_is_honored() {
+        assert_eq!(child_pretty_arg(Some(true)), "true");
+    }
 }

@@ -53,11 +53,7 @@ pub fn resolve_subset_inputs(
 
     let mut merged: HashSet<Utf8PathBuf> = HashSet::new();
     let mut out: Vec<Utf8PathBuf> = Vec::new();
-    for f in explicit_files
-        .into_iter()
-        .chain(dir_walked)
-        .chain(globbed)
-    {
+    for f in explicit_files.into_iter().chain(dir_walked).chain(globbed) {
         if is_ts_file(&f) && merged.insert(f.clone()) {
             out.push(f);
         }
@@ -80,7 +76,9 @@ fn walk_directories(dirs: &[Utf8PathBuf]) -> Result<Vec<Utf8PathBuf>, Error> {
             .follow_links(false);
         for result in builder.build() {
             let Ok(entry) = result else { continue };
-            let Some(ft) = entry.file_type() else { continue };
+            let Some(ft) = entry.file_type() else {
+                continue;
+            };
             if !ft.is_file() {
                 continue;
             }
@@ -132,7 +130,9 @@ fn glob_walk(patterns: &[String], cwd: &Utf8PathBuf) -> Result<Vec<Utf8PathBuf>,
 
     for result in builder.build() {
         let Ok(entry) = result else { continue };
-        let Some(ft) = entry.file_type() else { continue };
+        let Some(ft) = entry.file_type() else {
+            continue;
+        };
         if !ft.is_file() {
             continue;
         }

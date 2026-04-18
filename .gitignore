@@ -5,3 +5,4 @@ coverage
 
 target
 npm/platforms/*/bin
+npm/platforms/*/native

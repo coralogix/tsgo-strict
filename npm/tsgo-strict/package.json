@@ -18,9 +18,11 @@
     "tsgo-strict": "bin/tsgo-strict.js"
   },
   "main": "index.js",
+  "types": "index.d.ts",
   "files": [
     "bin",
     "index.js",
+    "index.d.ts",
     "README.md",
     "LICENSE"
   ],
@@ -37,5 +39,13 @@
   },
   "dependencies": {
     "detect-libc": "^2.0.3"
+  },
+  "peerDependencies": {
+    "@typescript/native-preview": ">=7.0.0-dev"
+  },
+  "peerDependenciesMeta": {
+    "@typescript/native-preview": {
+      "optional": true
+    }
   }
 }

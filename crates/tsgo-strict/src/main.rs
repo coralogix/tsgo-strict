@@ -63,9 +63,12 @@ impl From<ModeArg> for Mode {
 fn main() -> ExitCode {
     let cli = Cli::parse();
 
-    let cwd_raw = cli
-        .cwd
-        .unwrap_or_else(|| std::env::current_dir().unwrap().to_string_lossy().into_owned());
+    let cwd_raw = cli.cwd.unwrap_or_else(|| {
+        std::env::current_dir()
+            .unwrap()
+            .to_string_lossy()
+            .into_owned()
+    });
     let cwd = match Utf8PathBuf::from(cwd_raw).canonicalize_utf8() {
         Ok(p) => p,
         Err(e) => {

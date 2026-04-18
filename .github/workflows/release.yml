@@ -22,31 +22,37 @@ jobs:
             runner: ubuntu-latest
             cross: false
             bin_ext: ''
+            addon_src: libtsgo_strict_napi.so
           - triple: linux-x64-musl
             target: x86_64-unknown-linux-musl
             runner: ubuntu-latest
             cross: true
             bin_ext: ''
+            addon_src: libtsgo_strict_napi.so
           - triple: linux-arm64-gnu
             target: aarch64-unknown-linux-gnu
             runner: ubuntu-latest
             cross: true
             bin_ext: ''
+            addon_src: libtsgo_strict_napi.so
           - triple: darwin-x64
             target: x86_64-apple-darwin
             runner: macos-13
             cross: false
             bin_ext: ''
+            addon_src: libtsgo_strict_napi.dylib
           - triple: darwin-arm64
             target: aarch64-apple-darwin
             runner: macos-14
             cross: false
             bin_ext: ''
+            addon_src: libtsgo_strict_napi.dylib
           - triple: win32-x64-msvc
             target: x86_64-pc-windows-msvc
             runner: windows-latest
             cross: false
             bin_ext: '.exe'
+            addon_src: tsgo_strict_napi.dll
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 30
     steps:
@@ -66,23 +72,36 @@ jobs:
         if: matrix.cross
         run: cargo install cross --locked
 
-      - name: Build (native)
+      - name: Build CLI (native)
         if: '!matrix.cross'
         shell: bash
         run: cargo build --release --target ${{ matrix.target }} -p tsgo-strict
 
-      - name: Build (cross)
+      - name: Build CLI (cross)
         if: matrix.cross
         shell: bash
         run: cross build --release --target ${{ matrix.target }} -p tsgo-strict
 
-      - name: Stage binary into platform package
+      - name: Build N-API addon (native)
+        if: '!matrix.cross'
+        shell: bash
+        run: cargo build --release --target ${{ matrix.target }} -p tsgo-strict-napi
+
+      - name: Build N-API addon (cross)
+        if: matrix.cross
+        shell: bash
+        run: cross build --release --target ${{ matrix.target }} -p tsgo-strict-napi
+
+      - name: Stage binary + addon into platform package
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p npm/platforms/${{ matrix.triple }}/bin
+          mkdir -p npm/platforms/${{ matrix.triple }}/native
           cp "target/${{ matrix.target }}/release/tsgo-strict${{ matrix.bin_ext }}" \
              "npm/platforms/${{ matrix.triple }}/bin/tsgo-strict${{ matrix.bin_ext }}"
+          cp "target/${{ matrix.target }}/release/${{ matrix.addon_src }}" \
+             "npm/platforms/${{ matrix.triple }}/native/tsgo-strict.node"
 
       - name: Upload platform package artifact
         uses: actions/upload-artifact@v4

@@ -72,7 +72,10 @@ mod tests {
 
     #[test]
     fn detects_strict() {
-        assert_eq!(classify_head(b"// @ts-strict\nconst x = 1;"), PragmaHint::Strict);
+        assert_eq!(
+            classify_head(b"// @ts-strict\nconst x = 1;"),
+            PragmaHint::Strict
+        );
     }
 
     #[test]
@@ -93,7 +96,10 @@ mod tests {
 
     #[test]
     fn word_boundary_required() {
-        assert_eq!(classify_head(b"// @ts-strictx\nconst x = 1;"), PragmaHint::None);
+        assert_eq!(
+            classify_head(b"// @ts-strictx\nconst x = 1;"),
+            PragmaHint::None
+        );
     }
 
     #[test]

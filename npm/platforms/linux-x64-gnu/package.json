@@ -7,11 +7,13 @@
     "type": "git",
     "url": "git+https://github.com/ashley-hunter/tsgo-strict-plugin.git"
   },
+  "main": "native/tsgo-strict.node",
   "bin": {
     "tsgo-strict": "bin/tsgo-strict"
   },
   "files": [
     "bin/tsgo-strict",
+    "native/tsgo-strict.node",
     "README.md"
   ],
   "os": ["linux"],

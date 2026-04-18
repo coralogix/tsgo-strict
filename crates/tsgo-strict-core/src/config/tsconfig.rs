@@ -68,8 +68,8 @@ pub fn read_raw_tsconfig(path: &Path) -> Result<serde_json::Value, Error> {
 fn parse_jsonc(source: &str) -> Result<serde_json::Value, String> {
     use jsonc_parser::{parse_to_serde_value, ParseOptions};
 
-    let parsed = parse_to_serde_value(source, &ParseOptions::default())
-        .map_err(|e| e.to_string())?;
+    let parsed =
+        parse_to_serde_value(source, &ParseOptions::default()).map_err(|e| e.to_string())?;
     Ok(parsed.unwrap_or(serde_json::Value::Null))
 }
 

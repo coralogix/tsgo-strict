@@ -4,4 +4,4 @@ pub mod temp_config;
 
 mod pipeline;
 
-pub use pipeline::{run, RunOutcome};
+pub use pipeline::{run, run_structured, RunOutcome, StructuredOutcome};

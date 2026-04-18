@@ -1,64 +1,90 @@
 # tsgo-strict
 
-`tsgo-strict` is a fast strict-only checker that mirrors `tsc-strict` style diagnostics while executing checks through `tsgo`.
+`tsgo-strict` is a fast, strict-only TypeScript checker. It wraps Microsoft's
+`tsgo` compiler (`@typescript/native-preview`) and emits only the diagnostics
+you would see if strict mode were turned on for a specific subset of your
+project — enabling a file-by-file or path-by-path migration to strict.
+
+Written in Rust and distributed through per-platform npm packages (the
+`tsgo-strict` launcher plus one prebuilt binary + N-API addon per target,
+resolved via `optionalDependencies`).
 
 ## What it does
 
 - Reads `typescript-strict-plugin` config from `compilerOptions.plugins`.
+- Honors `@ts-strict` / `@ts-strict-ignore` pragmas.
 - Supports checking an explicit subset of files or globs.
-- In `--mode exact` (default), performs baseline-vs-strict diff and reports only net strict diagnostics.
-- Emits `tsc`-like text output or JSON.
+- In `--mode exact` (default), runs a baseline pass and a strict pass in
+  parallel and reports only the **net** strict diagnostics.
+- Emits `tsc`-style text output or JSON.
 
 ## Install
 
 ```bash
-pnpm add -D tsgo-strict
+npm install --save-dev tsgo-strict @typescript/native-preview
+# or
+pnpm add -D tsgo-strict @typescript/native-preview
 ```
 
-## Usage
+`@typescript/native-preview` is declared as an optional peer dependency — any
+tsgo available on `PATH`, in `node_modules/.bin`, or via the `TSGO_BINARY`
+env var works too.
+
+## CLI usage
 
 ```bash
 tsgo-strict [fileOrGlob ...]
 ```
 
-### Options
+Options:
 
-- `-p, --project <path>`: tsconfig path (default `tsconfig.json`)
-- `--json`: JSON diagnostics
-- `--pretty` / `--no-pretty`: backend pretty printing toggle
-- `--trace-performance`: timing breakdown to stderr
-- `--strict-plugin <name>`: plugin name (default `typescript-strict-plugin`)
-- `--mode <exact|fast>`: default `exact`
-- `--max-diagnostics <n>`: output cap
-- `--cwd <path>`: working directory
+- `-p, --project <path>` — tsconfig path (default `tsconfig.json`)
+- `--json` — JSON diagnostics
+- `--pretty` / `--no-pretty` — forward pretty output to tsgo
+- `--trace-performance` — per-phase timings on stderr
+- `--strict-plugin <name>` — plugin name (default `typescript-strict-plugin`)
+- `--mode <exact|fast>` — default `exact`
+- `--max-diagnostics <n>` — cap the diagnostic output
+- `--cwd <path>` — override working directory
 
-## Exit codes
+Exit codes:
 
-- `0`: no strict diagnostics
-- `1`: strict diagnostics found
-- `2`: tool/config/runtime error
+- `0` — no strict diagnostics
+- `1` — strict diagnostics found
+- `2` — tool/config/runtime error
 
-## Notes
+Environment:
 
-- v1 supports single `tsconfig` runs.
-- Set `TSGO_BINARY=/path/to/tsgo` to override backend binary discovery.
-- Exact mode runs baseline/strict passes concurrently by default.
-- Set `TSGO_STRICT_PARALLEL=0` to force sequential exact-mode passes.
+- `TSGO_BINARY` — explicit path to a `tsgo` binary (highest-priority resolver)
+- `TSGO_STRICT_PARALLEL=0` — force sequential baseline+strict passes in
+  `--mode exact` (default runs them concurrently)
 
-## Development commands
+## Programmatic API
 
-- `pnpm typecheck`
-- `pnpm lint`
-- `pnpm lint:fix`
-- `pnpm format`
-- `pnpm format:write`
+```js
+import { run } from 'tsgo-strict';
 
-## Git hooks
+const result = await run({
+  project: 'tsconfig.json',
+  subset: ['src/in-scope'],
+  mode: 'exact',
+});
 
-- `pre-commit`: runs `lint-staged` (`prettier --write` + `eslint --fix` on staged files)
-- `pre-push`: runs `pnpm prepush:check` (`typecheck`, `test`, `build`)
+console.log(result.errorCount, result.diagnostics);
+```
 
-Husky is wired via the `prepare` script and activates when this directory is a Git repo.
+Returns `{ mode, errorCount, exitCode, truncated, diagnostics[], timings[] }`.
+Full type definitions ship with the package.
+
+## Development
+
+See [CONTRIBUTING.md](./CONTRIBUTING.md). The short version:
+
+```bash
+cargo build --release
+cargo test --workspace
+pnpm test:node          # builds the N-API addon + runs Node integration tests
+```
 
 ## Open source project files
 
@@ -66,4 +92,4 @@ Husky is wired via the `prepare` script and activates when this directory is a G
 - [CODE_OF_CONDUCT.md](./CODE_OF_CONDUCT.md)
 - [SECURITY.md](./SECURITY.md)
 - [SUPPORT.md](./SUPPORT.md)
-- [CHANGELOG.md](./CHANGELOG.md)
+- [BENCHMARKS.md](./BENCHMARKS.md)

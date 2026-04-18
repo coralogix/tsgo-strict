@@ -1,6 +1,7 @@
 'use strict';
 
-const { familySync, GLIBC, MUSL } = require('detect-libc');
+const path = require('node:path');
+const { familySync, MUSL } = require('detect-libc');
 
 function pickPackage() {
   const platform = process.platform;
@@ -20,30 +21,52 @@ function pickPackage() {
   return null;
 }
 
-function resolveBinary() {
+function platformPackageJson() {
   const name = pickPackage();
   if (!name) {
     throw new Error(
-      `tsgo-strict: unsupported platform ${process.platform}-${process.arch} (glibc family: ${familySync() || 'n/a'})`
+      `tsgo-strict: unsupported platform ${process.platform}-${process.arch} (libc family: ${familySync() || 'n/a'})`
     );
   }
   let packagePath;
   try {
     packagePath = require.resolve(`${name}/package.json`);
-  } catch (err) {
+  } catch {
     throw new Error(
       `tsgo-strict: expected platform package '${name}' is not installed. ` +
         `This usually means 'optionalDependencies' was not installed (check npm/pnpm/yarn install logs).`
     );
   }
-  const pkg = require(packagePath);
+  return { name, packagePath, pkg: require(packagePath) };
+}
+
+function resolveBinary() {
+  const { pkg, packagePath } = platformPackageJson();
   const binField = pkg.bin;
   const relative = typeof binField === 'string' ? binField : binField && binField['tsgo-strict'];
   if (!relative) {
-    throw new Error(`tsgo-strict: platform package '${name}' has no bin entry`);
+    throw new Error(`tsgo-strict: platform package has no bin entry`);
   }
-  const path = require('node:path');
   return path.resolve(path.dirname(packagePath), relative);
 }
 
-module.exports = { resolveBinary, pickPackage };
+function resolveNativeAddon() {
+  const { pkg, packagePath } = platformPackageJson();
+  const relative = pkg.main || 'native/tsgo-strict.node';
+  return path.resolve(path.dirname(packagePath), relative);
+}
+
+let cachedAddon = null;
+function loadAddon() {
+  if (cachedAddon) return cachedAddon;
+  const addonPath = resolveNativeAddon();
+  cachedAddon = require(addonPath);
+  return cachedAddon;
+}
+
+async function run(options = {}) {
+  const addon = loadAddon();
+  return addon.run(options);
+}
+
+module.exports = { resolveBinary, resolveNativeAddon, pickPackage, run };

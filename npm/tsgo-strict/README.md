@@ -1,8 +1,8 @@
 # tsgo-strict
 
-Strict-only TypeScript checking powered by the [`tsgo`](https://www.npmjs.com/package/@typescript/native-preview) native compiler, emulating [`typescript-strict-plugin`](https://github.com/allegro/typescript-strict-plugin) so you can adopt `strict: true` gradually.
+Strict-only TypeScript checking powered by the [`tsgo`](https://www.npmjs.com/package/@typescript/native-preview) native compiler, reading `typescript-strict-plugin`-style config so you can adopt `strict: true` gradually.
 
-Ships a native Rust CLI via platform-specific subpackages; no Node runtime work on the hot path.
+Ships a native Rust CLI plus an N-API addon via platform-specific subpackages; no Node runtime work on the hot path.
 
 ## Install
 
@@ -10,9 +10,9 @@ Ships a native Rust CLI via platform-specific subpackages; no Node runtime work 
 npm install --save-dev tsgo-strict @typescript/native-preview
 ```
 
-The correct native binary for your platform is installed automatically through `optionalDependencies`.
+The correct native binary and addon for your platform are installed automatically through `optionalDependencies`.
 
-## Usage
+## CLI usage
 
 ```sh
 tsgo-strict --project tsconfig.json
@@ -21,6 +21,21 @@ tsgo-strict --mode fast --json   # single compile pass, JSON output
 ```
 
 See `tsgo-strict --help` for all flags.
+
+## Programmatic API
+
+```js
+import { run } from 'tsgo-strict';
+
+const result = await run({
+  project: 'tsconfig.json',
+  subset: ['src/feature'],
+});
+
+console.log(result.errorCount, result.diagnostics);
+```
+
+Full TypeScript types are shipped with the package.
 
 ## Supported platforms
 

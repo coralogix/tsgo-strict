@@ -11,4 +11,4 @@ pub mod runner;
 
 pub use errors::Error;
 pub use options::{CliOptions, Mode};
-pub use runner::run;
+pub use runner::{run, run_structured, RunOutcome, StructuredOutcome};

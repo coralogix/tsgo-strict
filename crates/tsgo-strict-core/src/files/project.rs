@@ -51,7 +51,9 @@ pub fn enumerate_project_files(ctx: &ProjectContext) -> Result<ProjectScope, Err
             Ok(e) => e,
             Err(_) => continue,
         };
-        let Some(ft) = entry.file_type() else { continue };
+        let Some(ft) = entry.file_type() else {
+            continue;
+        };
         if !ft.is_file() {
             continue;
         }
@@ -139,18 +141,15 @@ fn build_glob_set(
     }
     let mut builder = GlobSetBuilder::new();
     for pattern in patterns {
-        let anchored = if pattern.starts_with('/')
-            || pattern.starts_with("**/")
-            || pattern.contains(':')
-        {
-            pattern.clone()
-        } else {
-            format!("{}/{}", base.as_str().trim_end_matches('/'), pattern)
-        };
+        let anchored =
+            if pattern.starts_with('/') || pattern.starts_with("**/") || pattern.contains(':') {
+                pattern.clone()
+            } else {
+                format!("{}/{}", base.as_str().trim_end_matches('/'), pattern)
+            };
 
-        let glob = Glob::new(&anchored).map_err(|e| {
-            Error::msg(format!("invalid glob pattern '{}': {}", pattern, e))
-        })?;
+        let glob = Glob::new(&anchored)
+            .map_err(|e| Error::msg(format!("invalid glob pattern '{}': {}", pattern, e)))?;
         builder.add(glob);
     }
     let set = builder

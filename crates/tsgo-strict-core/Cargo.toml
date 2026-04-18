@@ -22,3 +22,6 @@ tempfile.workspace = true
 which.workspace = true
 strip-ansi-escapes.workspace = true
 camino.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

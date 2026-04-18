@@ -12,6 +12,7 @@
   "scripts": {
     "build": "cargo build --release",
     "test": "cargo test --workspace",
+    "test:node": "bash scripts/stage-local-addon.sh && node --test npm/tsgo-strict/test/napi.test.mjs",
     "fmt": "cargo fmt --all",
     "fmt:check": "cargo fmt --all -- --check",
     "lint": "cargo clippy --workspace --all-targets -- -D warnings",

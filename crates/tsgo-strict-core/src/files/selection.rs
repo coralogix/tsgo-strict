@@ -6,8 +6,7 @@ use globset::{Glob, GlobMatcher};
 use rayon::prelude::*;
 use regex::Regex;
 
-/// Decide which files qualify as "strict" under the plugin config. Mirrors
-/// `findStrictCandidates` + `isStrictFile` in src/config/strictFileSelection.ts:
+/// Decide which files qualify as "strict" under the plugin config:
 ///
 /// 1. Read first 4096 bytes, look for pragma:
 ///    * `@ts-strict-ignore` → excluded, regardless of config.
@@ -66,8 +65,7 @@ fn is_strict_file(
 
     let in_paths = match path_matchers {
         None => true,
-        Some(matchers) if matchers.is_empty() => true,
-        Some(matchers) => matchers.iter().any(|m| m.is_match(relative_path)),
+        Some(matchers) => matchers.is_empty() || matchers.iter().any(|m| m.is_match(relative_path)),
     };
 
     let excluded = match exclude_regex {
@@ -106,7 +104,9 @@ fn compile_path_matchers(
     Ok(Some(out))
 }
 
-fn compile_exclude_regex(plugin_config: Option<&StrictPluginConfig>) -> Result<Option<Regex>, Error> {
+fn compile_exclude_regex(
+    plugin_config: Option<&StrictPluginConfig>,
+) -> Result<Option<Regex>, Error> {
     let Some(cfg) = plugin_config else {
         return Ok(None);
     };

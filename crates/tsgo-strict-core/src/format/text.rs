@@ -24,10 +24,7 @@ pub fn format_text_output(
         _ => &sorted[..],
     };
 
-    let mut lines: Vec<String> = displayed
-        .iter()
-        .map(|d| format_line(d, cwd))
-        .collect();
+    let mut lines: Vec<String> = displayed.iter().map(|d| format_line(d, cwd)).collect();
 
     if truncated {
         let n = max_diagnostics.unwrap();

@@ -17,6 +17,13 @@ impl Timer {
         Self::default()
     }
 
+    pub fn from_entries(entries: Vec<TimerEntry>) -> Self {
+        Self {
+            starts: Vec::new(),
+            entries,
+        }
+    }
+
     pub fn start(&mut self, label: impl Into<String>) {
         self.starts.push((label.into(), Instant::now()));
     }

@@ -1,7 +1,7 @@
 use crate::diagnostics::Diagnostic;
 use std::collections::HashSet;
 
-/// Port of src/diag/diff.ts + src/diag/normalize.ts. The key is
+/// Diff strict-mode diagnostics against a baseline. The key is
 /// `path|line|col|code|category|message` with path lowercased and
 /// forward-slashed, and message whitespace flattened.
 pub fn diff_diagnostics(strict: Vec<Diagnostic>, baseline: &[Diagnostic]) -> Vec<Diagnostic> {

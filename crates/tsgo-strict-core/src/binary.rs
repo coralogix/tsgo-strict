@@ -2,8 +2,7 @@ use crate::errors::Error;
 use camino::Utf8PathBuf;
 use std::path::{Path, PathBuf};
 
-/// Locate the `tsgo` binary, mirroring resolveTsgoBinary in
-/// src/runner/tsgoRunner.ts:
+/// Locate the `tsgo` binary:
 ///
 /// 1. `TSGO_BINARY` env var (trimmed, non-empty).
 /// 2. Walk up from `cwd` checking `node_modules/.bin/tsgo` (or `.cmd`/`.exe`).
@@ -103,4 +102,129 @@ fn extract_bin(pkg: &serde_json::Value) -> Option<String> {
         }
     }
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use tempfile::TempDir;
+
+    fn touch_exe(path: &Path) {
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent).unwrap();
+        }
+        fs::write(path, b"#!/bin/sh\nexit 0\n").unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(path, fs::Permissions::from_mode(0o755)).unwrap();
+        }
+    }
+
+    fn write_pkg(dir: &Path, bin: &serde_json::Value) {
+        fs::create_dir_all(dir).unwrap();
+        let pkg = serde_json::json!({ "name": "fake", "bin": bin });
+        fs::write(dir.join("package.json"), pkg.to_string()).unwrap();
+    }
+
+    #[test]
+    fn find_node_modules_bin_walks_up_from_nested_cwd() {
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path();
+        let bin = root.join("node_modules").join(".bin").join(bin_name());
+        touch_exe(&bin);
+
+        let nested = root.join("packages").join("app").join("src");
+        fs::create_dir_all(&nested).unwrap();
+
+        let found = find_node_modules_bin(&nested).expect("bin should be discovered");
+        assert_eq!(found, bin);
+    }
+
+    #[test]
+    fn find_node_modules_bin_returns_none_when_absent() {
+        let tmp = TempDir::new().unwrap();
+        assert!(find_node_modules_bin(tmp.path()).is_none());
+    }
+
+    #[test]
+    fn find_package_bin_resolves_native_preview_like_a_peer_dep() {
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path();
+        let pkg_dir = root
+            .join("node_modules")
+            .join("@typescript")
+            .join("native-preview");
+        write_pkg(&pkg_dir, &serde_json::json!({ "tsgo": "bin/tsgo.js" }));
+        touch_exe(&pkg_dir.join("bin").join("tsgo.js"));
+
+        let nested = root.join("app");
+        fs::create_dir_all(&nested).unwrap();
+
+        let found =
+            find_package_bin(&nested, "@typescript/native-preview").expect("peer dep resolution");
+        assert_eq!(found, pkg_dir.join("bin").join("tsgo.js"));
+    }
+
+    #[test]
+    fn find_package_bin_returns_none_when_bin_file_missing() {
+        // package.json points at a path that is not on disk → treated as unresolved.
+        let tmp = TempDir::new().unwrap();
+        let pkg_dir = tmp.path().join("node_modules").join("tsgo");
+        write_pkg(&pkg_dir, &serde_json::json!({ "tsgo": "bin/missing.js" }));
+
+        assert!(find_package_bin(tmp.path(), "tsgo").is_none());
+    }
+
+    #[test]
+    fn extract_bin_handles_string_object_and_fallback() {
+        let s = serde_json::json!({ "bin": "bin/tsgo.js" });
+        assert_eq!(extract_bin(&s), Some("bin/tsgo.js".to_string()));
+
+        let obj = serde_json::json!({ "bin": { "tsgo": "bin/tsgo.js", "other": "x" } });
+        assert_eq!(extract_bin(&obj), Some("bin/tsgo.js".to_string()));
+
+        let other = serde_json::json!({ "bin": { "only": "bin/only.js" } });
+        assert_eq!(extract_bin(&other), Some("bin/only.js".to_string()));
+
+        let none = serde_json::json!({ "name": "fake" });
+        assert_eq!(extract_bin(&none), None);
+    }
+
+    #[test]
+    fn resolve_tsgo_binary_honors_env_override() {
+        let tmp = TempDir::new().unwrap();
+        let fake = tmp.path().join("my-tsgo");
+        touch_exe(&fake);
+        // SAFETY: tests that mutate env run serially via `cargo test -- --test-threads=1`
+        // when needed, but the env var is scoped to this scope and restored at drop.
+        let _guard = EnvGuard::set("TSGO_BINARY", fake.to_str().unwrap());
+
+        let cwd = Utf8PathBuf::from_path_buf(tmp.path().to_path_buf()).unwrap();
+        let resolved = resolve_tsgo_binary(&cwd).unwrap();
+        assert_eq!(resolved.as_std_path(), fake);
+    }
+
+    struct EnvGuard {
+        key: &'static str,
+        previous: Option<String>,
+    }
+
+    impl EnvGuard {
+        fn set(key: &'static str, value: &str) -> Self {
+            let previous = std::env::var(key).ok();
+            std::env::set_var(key, value);
+            Self { key, previous }
+        }
+    }
+
+    impl Drop for EnvGuard {
+        fn drop(&mut self) {
+            match self.previous.take() {
+                Some(v) => std::env::set_var(self.key, v),
+                None => std::env::remove_var(self.key),
+            }
+        }
+    }
 }
