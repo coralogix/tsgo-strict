@@ -16,8 +16,8 @@ resolved via `optionalDependencies`).
 - Reads `typescript-strict-plugin` config from `compilerOptions.plugins`.
 - Honors `@ts-strict` / `@ts-strict-ignore` pragmas.
 - Supports checking an explicit subset of files or globs.
-- Runs `tsgo` once with the 14 strict-family flags enabled, scoped to the
-  selected files, and reports the diagnostics it produces.
+- Runs `tsgo` once with `"strict": true` enabled, scoped to the selected
+  files, and reports the diagnostics it produces.
 
 ## Why you'd use it
 
@@ -47,8 +47,8 @@ and its errors are filtered out of the output.
 2. **Selects the strict subset.** It reads the first 4 KB of each candidate
    file in parallel, checking for pragmas, then applies the plugin
    `paths` / `excludePattern` filter. Pragmas win over config.
-3. **Writes a temporary tsconfig** that `extends` yours with the 14
-   strict-family flags enabled and pinned to the selected files.
+3. **Writes a temporary tsconfig** that `extends` yours with
+   `"strict": true` enabled and pinned to the selected files.
 4. **Spawns `tsgo`** once against that config and collects diagnostics.
 5. **Prints** the result in `tsc`-style text, sorted for stable output, with
    an exit code reflecting whether anything remained.
@@ -63,18 +63,19 @@ Add the plugin block to your `tsconfig.json`:
     "plugins": [
       {
         "name": "typescript-strict-plugin",
-        "paths": ["./src/strict", "./src/shared/**/*.ts"],
-        "excludePattern": "\\.test\\.ts$"
+        "paths": ["./src/strict", "./src/shared"],
+        "excludePattern": ["**/*.test.ts"]
       }
     ]
   }
 }
 ```
 
-- `paths` — glob patterns (minimatch syntax) included in the strict subset.
-  Omit for "include everything" and rely on pragmas/excludes.
-- `excludePattern` — a regex applied to each file's path; matches are
-  excluded.
+- `paths` — directory prefixes included in the strict subset. A file is
+  included if its path lives under any entry. Omit for "include everything"
+  and rely on pragmas / `excludePattern` to scope down.
+- `excludePattern` — array of minimatch glob patterns (a single string is
+  also accepted). Files matching any pattern are excluded.
 
 Then drop pragmas into individual files to override:
 

@@ -101,10 +101,19 @@ fn resolve_plugin_config(
                     .collect::<Vec<_>>()
             });
 
-            let exclude_pattern = obj
-                .get("excludePattern")
-                .and_then(|v| v.as_str())
-                .map(|s| s.to_string());
+            // Match the original plugin: `excludePattern` is `string[]` of
+            // minimatch globs. Accept a bare string too for convenience —
+            // `typescript-strict-plugin` doesn't, but the TS typings let you
+            // get away with it and users in the wild write both shapes.
+            let exclude_pattern = match obj.get("excludePattern") {
+                Some(serde_json::Value::String(s)) => Some(vec![s.clone()]),
+                Some(serde_json::Value::Array(arr)) => Some(
+                    arr.iter()
+                        .filter_map(|entry| entry.as_str().map(|s| s.to_string()))
+                        .collect::<Vec<_>>(),
+                ),
+                _ => None,
+            };
 
             matched = Some(StrictPluginConfig {
                 name: plugin_name.to_string(),

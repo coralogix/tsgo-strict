@@ -2,24 +2,12 @@ use crate::errors::Error;
 use camino::{Utf8Path, Utf8PathBuf};
 use tempfile::TempDir;
 
-/// 14 flags in the "strict family" — the full set tsc/tsgo treats as strict
-/// when `strict: true` is enabled, plus the four flags it does not bundle.
-pub const STRICT_FAMILY_FLAGS: &[&str] = &[
-    "strict",
-    "strictBindCallApply",
-    "strictBuiltinIteratorReturn",
-    "strictFunctionTypes",
-    "strictNullChecks",
-    "strictPropertyInitialization",
-    "useUnknownInCatchVariables",
-    "noImplicitAny",
-    "noImplicitThis",
-    "noImplicitOverride",
-    "noPropertyAccessFromIndexSignature",
-    "noUncheckedIndexedAccess",
-    "noUncheckedSideEffectImports",
-    "exactOptionalPropertyTypes",
-];
+/// We flip the single `strict` flag, matching the original
+/// `typescript-strict-plugin`. tsgo unfurls it into the standard strict
+/// bundle (`strictNullChecks`, `noImplicitAny`, `strictFunctionTypes`, …);
+/// no additional opt-ins like `noUncheckedIndexedAccess` or
+/// `exactOptionalPropertyTypes` are forced on.
+pub const STRICT_FAMILY_FLAGS: &[&str] = &["strict"];
 
 pub struct TempConfig {
     pub path: Utf8PathBuf,

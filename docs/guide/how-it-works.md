@@ -6,7 +6,7 @@ does five things on every run.
 <div class="tss-pipeline">
   <div class="tss-step"><strong>Load tsconfig</strong>Resolve the project config, walk the <code>extends</code> chain, pull the plugin block out of <code>compilerOptions.plugins</code>, and compute the project's source file list.</div>
   <div class="tss-step"><strong>Select strict subset</strong>Read the first 4 KB of each candidate file in parallel via <code>rayon</code>, check for pragmas, then apply <code>paths</code> / <code>excludePattern</code>. Pragmas win over config.</div>
-  <div class="tss-step"><strong>Write temp tsconfig</strong>Emit a temporary tsconfig that <code>extends</code> yours with the 14 strict-family flags enabled and <code>files</code> pinned to the selected subset.</div>
+  <div class="tss-step"><strong>Write temp tsconfig</strong>Emit a temporary tsconfig that <code>extends</code> yours with <code>"strict": true</code> enabled and <code>files</code> pinned to the selected subset.</div>
   <div class="tss-step"><strong>Run tsgo once</strong>Spawn <code>tsgo</code> against the temp config, stream its diagnostics, and collect them in memory.</div>
   <div class="tss-step"><strong>Format &amp; exit</strong>Sort diagnostics for deterministic output, print them in <code>tsc</code>-style text, and exit with <code>0</code> / <code>1</code> / <code>2</code>.</div>
 </div>
@@ -27,15 +27,17 @@ does five things on every run.
 
 ## Where "strict" comes from
 
-The temporary tsconfig we emit flips exactly these compiler options on,
-regardless of what your base tsconfig says:
+The temporary tsconfig we emit flips exactly one compiler option on,
+regardless of what your base tsconfig says: `"strict": true`. This matches
+the original `typescript-strict-plugin`, which overrides the same single
+setting on the language service host.
 
-- `strict`, `strictBindCallApply`, `strictBuiltinIteratorReturn`,
-  `strictFunctionTypes`, `strictNullChecks`, `strictPropertyInitialization`
-- `noImplicitAny`, `noImplicitThis`, `noImplicitOverride`,
-  `noImplicitReturns`
-- `noFallthroughCasesInSwitch`, `noUncheckedIndexedAccess`
-- `noUnusedLocals`, `noUnusedParameters`
+`strict` is the umbrella flag that TypeScript unfurls into the standard
+strict bundle: `strictNullChecks`, `noImplicitAny`, `strictFunctionTypes`,
+`strictBindCallApply`, `strictPropertyInitialization`, `noImplicitThis`,
+`useUnknownInCatchVariables`, and `alwaysStrict`. Optional-but-related
+knobs like `noUncheckedIndexedAccess` or `exactOptionalPropertyTypes` are
+**not** forced on — opt in via your own tsconfig if you want them.
 
 Everything else (module, target, jsx, paths, lib, …) is inherited from your
 base config.

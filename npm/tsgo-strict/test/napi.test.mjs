@@ -133,7 +133,7 @@ test('consumer-style scratch project resolves tsgo from a peer dep', { skip: !ad
           strict: false,
           noEmit: true,
           skipLibCheck: true,
-          plugins: [{ name: 'typescript-strict-plugin', paths: ['src/**'] }],
+          plugins: [{ name: 'typescript-strict-plugin', paths: ['src'] }],
         },
         include: ['src/**/*'],
       }),

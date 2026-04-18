@@ -10,7 +10,7 @@
     "plugins": [
       {
         "name": "typescript-strict-plugin",
-        "paths": ["src/**/*.ts"]
+        "paths": ["src"]
       }
     ]
   },
