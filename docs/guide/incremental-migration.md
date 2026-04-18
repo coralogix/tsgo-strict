@@ -77,7 +77,7 @@ directory strict by default.
     {
       "name": "typescript-strict-plugin",
       "paths": ["./src/strict", "./src/shared"],
-      "excludePattern": "\\.test\\.ts$"
+      "excludePattern": ["**/*.test.ts"]
     }
   ]
 }

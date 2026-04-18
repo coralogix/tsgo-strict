@@ -80,8 +80,8 @@ Add a plugin block to your `tsconfig.json`:
     "plugins": [
       {
         "name": "typescript-strict-plugin",
-        "paths": ["./src/strict", "./src/shared/**/*.ts"],
-        "excludePattern": "\\.test\\.ts$"
+        "paths": ["./src/strict", "./src/shared"],
+        "excludePattern": ["**/*.test.ts"]
       }
     ]
   }

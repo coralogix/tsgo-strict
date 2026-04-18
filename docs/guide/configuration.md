@@ -14,8 +14,8 @@ project uses, so existing config Just Works.
     "plugins": [
       {
         "name": "typescript-strict-plugin",
-        "paths": ["./src/strict", "./src/shared/**/*.ts"],
-        "excludePattern": "\\.test\\.ts$"
+        "paths": ["./src/strict", "./src/shared"],
+        "excludePattern": ["**/*.test.ts"]
       }
     ]
   }
@@ -24,32 +24,39 @@ project uses, so existing config Just Works.
 
 ### `paths` (optional)
 
-An array of minimatch glob patterns. Files whose path (relative to the
-tsconfig) matches **any** of these patterns are included in the strict
-subset.
+An array of **directory prefixes**, resolved against the tsconfig's
+directory. A file is included if its absolute path lives under any entry
+(equivalent to `startsWith(entry + '/')`). This matches the original
+`typescript-strict-plugin`.
 
 - Omit `paths` (or leave it empty) to mean **"include everything"** — every
-  source file in the project is eligible, and you rely on `excludePattern` or
-  pragmas to scope down.
-- Trailing directory paths like `./src/strict` are treated as recursive
-  directory matches.
+  source file in the project is eligible, and you rely on `excludePattern`
+  or pragmas to scope down.
+- Entries are directory-prefix matches, not globs: `"src/components"`
+  includes every file under `src/components/`, recursively. `**` and `*`
+  are **not** special here.
+- Absolute paths are allowed and bypass the tsconfig directory.
 
 ### `excludePattern` (optional)
 
-A regular expression. Files whose path matches this regex are **excluded**
-from the strict subset, even if `paths` would otherwise include them.
+An array of **minimatch glob patterns** matched against each file's
+absolute posix path. A file is excluded from the strict subset if any
+pattern matches.
+
+Accepts either a single string or an array; a bare string is treated as a
+one-element array for convenience.
 
 Common patterns:
 
 ```jsonc
 {
-  "excludePattern": "\\.test\\.ts$"        // skip tests
+  "excludePattern": ["**/*.test.ts"]                  // skip tests
 }
 ```
 
 ```jsonc
 {
-  "excludePattern": "(\\.spec|__mocks__)"  // skip specs + mocks
+  "excludePattern": ["**/*.spec.ts", "**/__mocks__/**"] // skip specs + mocks
 }
 ```
 

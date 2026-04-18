@@ -42,4 +42,4 @@ if (exitCode === 2) {
   `node_modules/.bin/tsgo`, nor `PATH` has one).
 - The plugin block in `compilerOptions.plugins` is malformed JSON or has
   the wrong shape.
-- The `excludePattern` regex is invalid.
+- An `excludePattern` glob is invalid.

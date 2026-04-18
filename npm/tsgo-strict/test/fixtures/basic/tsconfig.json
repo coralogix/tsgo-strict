@@ -9,7 +9,7 @@
     "plugins": [
       {
         "name": "typescript-strict-plugin",
-        "paths": ["src/in-scope/**"]
+        "paths": ["src/in-scope"]
       }
     ]
   },

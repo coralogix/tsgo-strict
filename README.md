@@ -63,18 +63,19 @@ Add the plugin block to your `tsconfig.json`:
     "plugins": [
       {
         "name": "typescript-strict-plugin",
-        "paths": ["./src/strict", "./src/shared/**/*.ts"],
-        "excludePattern": "\\.test\\.ts$"
+        "paths": ["./src/strict", "./src/shared"],
+        "excludePattern": ["**/*.test.ts"]
       }
     ]
   }
 }
 ```
 
-- `paths` — glob patterns (minimatch syntax) included in the strict subset.
-  Omit for "include everything" and rely on pragmas/excludes.
-- `excludePattern` — a regex applied to each file's path; matches are
-  excluded.
+- `paths` — directory prefixes included in the strict subset. A file is
+  included if its path lives under any entry. Omit for "include everything"
+  and rely on pragmas / `excludePattern` to scope down.
+- `excludePattern` — array of minimatch glob patterns (a single string is
+  also accepted). Files matching any pattern are excluded.
 
 Then drop pragmas into individual files to override:
 
