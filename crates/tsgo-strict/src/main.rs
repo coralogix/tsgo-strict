@@ -1,8 +1,8 @@
 use camino::Utf8PathBuf;
-use clap::{Parser, ValueEnum};
+use clap::Parser;
 use std::io::Write;
 use std::process::ExitCode;
-use tsgo_strict_core::{run, CliOptions, Mode};
+use tsgo_strict_core::{run, CliOptions};
 
 #[derive(Parser, Debug)]
 #[command(name = "tsgo-strict", version)]
@@ -29,10 +29,6 @@ struct Cli {
     #[arg(long, default_value = "typescript-strict-plugin")]
     strict_plugin: String,
 
-    /// Diagnostic mode
-    #[arg(long, value_enum, default_value_t = ModeArg::Exact)]
-    mode: ModeArg,
-
     /// Maximum number of diagnostics to print
     #[arg(long)]
     max_diagnostics: Option<usize>,
@@ -43,21 +39,6 @@ struct Cli {
 
     /// Files or globs to restrict the strict check to
     subset: Vec<String>,
-}
-
-#[derive(Copy, Clone, Debug, ValueEnum)]
-enum ModeArg {
-    Exact,
-    Fast,
-}
-
-impl From<ModeArg> for Mode {
-    fn from(value: ModeArg) -> Self {
-        match value {
-            ModeArg::Exact => Mode::Exact,
-            ModeArg::Fast => Mode::Fast,
-        }
-    }
 }
 
 fn main() -> ExitCode {
@@ -83,7 +64,6 @@ fn main() -> ExitCode {
         pretty: cli.pretty,
         trace_performance: cli.trace_performance,
         strict_plugin: cli.strict_plugin,
-        mode: cli.mode.into(),
         max_diagnostics: cli.max_diagnostics,
         cwd,
         subset_inputs: cli.subset,

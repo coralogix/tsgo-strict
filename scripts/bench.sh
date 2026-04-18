@@ -51,8 +51,5 @@ bench() {
 
 echo '| Scenario                                   | Median    | Samples (ms) |'
 echo '|--------------------------------------------|-----------|--------------|'
-bench "full / exact / parallel" "$BIN" --project perf-demo/tsconfig.json
-bench "full / exact / sequential"   env TSGO_STRICT_PARALLEL=0 "$BIN" --project perf-demo/tsconfig.json
-bench "full / fast"                 "$BIN" --mode fast --project perf-demo/tsconfig.json
-bench "subset batch-00 / exact"     "$BIN" --project perf-demo/tsconfig.json perf-demo/src/batch-00
-bench "subset batch-00 / fast"      "$BIN" --mode fast --project perf-demo/tsconfig.json perf-demo/src/batch-00
+bench "full project"              "$BIN" --project perf-demo/tsconfig.json
+bench "subset batch-00"           "$BIN" --project perf-demo/tsconfig.json perf-demo/src/batch-00

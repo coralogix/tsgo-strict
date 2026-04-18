@@ -31,7 +31,6 @@ pub fn write_temp_config(
     project_path: &Utf8Path,
     raw_config: &serde_json::Value,
     files: &[Utf8PathBuf],
-    strict_enabled: bool,
 ) -> Result<TempConfig, Error> {
     let parent = cwd.as_std_path().join(".tsgo-strict-tmp");
     std::fs::create_dir_all(&parent)
@@ -48,12 +47,7 @@ pub fn write_temp_config(
             ))
         })?;
 
-    let filename = if strict_enabled {
-        "strict.json"
-    } else {
-        "baseline.json"
-    };
-    let config_path = dir.path().join(filename);
+    let config_path = dir.path().join("strict.json");
 
     let mut compiler_options = raw_config
         .get("compilerOptions")
@@ -63,7 +57,7 @@ pub fn write_temp_config(
 
     compiler_options.insert("noEmit".to_string(), serde_json::Value::Bool(true));
     for flag in STRICT_FAMILY_FLAGS {
-        compiler_options.insert(flag.to_string(), serde_json::Value::Bool(strict_enabled));
+        compiler_options.insert(flag.to_string(), serde_json::Value::Bool(true));
     }
 
     let relative_files: Vec<serde_json::Value> = files

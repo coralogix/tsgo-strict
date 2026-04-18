@@ -37,7 +37,6 @@ test('pickPackage returns a supported triple for the current host', () => {
 test('full project run reports strict errors only from in-scope paths', { skip: !addonReady }, async () => {
   const result = await run({ project: path.join(FIXTURE, 'tsconfig.json'), cwd: FIXTURE });
 
-  assert.equal(result.mode, 'exact');
   assert.equal(typeof result.errorCount, 'number');
   assert.ok(result.errorCount > 0, 'expected strict errors from src/in-scope');
   assert.equal(result.truncated, false);
@@ -65,15 +64,13 @@ test('subset limited to out-of-scope returns no strict errors', { skip: !addonRe
   assert.deepEqual(result.diagnostics, []);
 });
 
-test('fast mode populates per-phase timings', { skip: !addonReady }, async () => {
+test('run populates per-phase timings', { skip: !addonReady }, async () => {
   const result = await run({
     project: path.join(FIXTURE, 'tsconfig.json'),
     cwd: FIXTURE,
-    mode: 'fast',
   });
 
-  assert.equal(result.mode, 'fast');
-  assert.ok(result.timings.length > 0, 'fast mode should still report timings');
+  assert.ok(result.timings.length > 0, 'expected per-phase timings');
   for (const t of result.timings) {
     assert.equal(typeof t.label, 'string');
     assert.equal(typeof t.durationMs, 'number');
@@ -94,13 +91,6 @@ test('maxDiagnostics clips the diagnostics array and flags truncated', { skip: !
   assert.equal(clipped.errorCount, baseline.errorCount);
   assert.equal(clipped.diagnostics.length, 1);
   assert.equal(clipped.truncated, true);
-});
-
-test('invalid mode surfaces as a rejection', { skip: !addonReady }, async () => {
-  await assert.rejects(
-    () => run({ project: path.join(FIXTURE, 'tsconfig.json'), cwd: FIXTURE, mode: 'wild' }),
-    /invalid mode/,
-  );
 });
 
 test('pragmas override plugin path membership', { skip: !addonReady }, async () => {

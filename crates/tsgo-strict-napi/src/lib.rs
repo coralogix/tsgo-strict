@@ -2,7 +2,7 @@
 //!
 //! Exposes a single `run` function that mirrors the CLI surface but returns
 //! structured diagnostics and per-phase timings instead of text/JSON. The
-//! actual work is synchronous and I/O-heavy (2 tsgo subprocesses), so we run
+//! actual work is synchronous and I/O-heavy (one tsgo subprocess), so we run
 //! it on a blocking tokio thread so the Node event loop is not stalled.
 
 #![deny(clippy::all)]
@@ -12,7 +12,7 @@ use napi::bindgen_prelude::*;
 use napi::tokio::task;
 use napi_derive::napi;
 use tsgo_strict_core::diagnostics::Category;
-use tsgo_strict_core::options::{CliOptions, Mode};
+use tsgo_strict_core::options::CliOptions;
 use tsgo_strict_core::run_structured;
 
 #[napi(object)]
@@ -25,8 +25,6 @@ pub struct RunOptions {
     /// Plugin name to look up in `compilerOptions.plugins`. Defaults to
     /// `typescript-strict-plugin`.
     pub strict_plugin: Option<String>,
-    /// `"exact"` (default) or `"fast"`.
-    pub mode: Option<String>,
     /// Explicit file or directory inputs to restrict the check to. Empty means
     /// full project.
     pub subset: Option<Vec<String>>,
@@ -55,7 +53,6 @@ pub struct RunTiming {
 
 #[napi(object)]
 pub struct RunResult {
-    pub mode: String,
     pub error_count: u32,
     pub exit_code: i32,
     pub truncated: bool,
@@ -106,7 +103,6 @@ pub async fn run(options: RunOptions) -> Result<RunResult> {
         .collect();
 
     Ok(RunResult {
-        mode: outcome.mode.as_str().to_string(),
         error_count: u32::try_from(total).unwrap_or(u32::MAX),
         exit_code: outcome.exit_code,
         truncated,
@@ -125,16 +121,6 @@ fn build_cli_options(opts: RunOptions) -> std::result::Result<CliOptions, String
         ),
     };
 
-    let mode = match opts.mode.as_deref().unwrap_or("exact") {
-        "exact" => Mode::Exact,
-        "fast" => Mode::Fast,
-        other => {
-            return Err(format!(
-                "invalid mode '{other}' (expected 'exact' or 'fast')"
-            ))
-        }
-    };
-
     Ok(CliOptions {
         project: opts.project.unwrap_or_else(|| "tsconfig.json".to_string()),
         json: false,
@@ -143,7 +129,6 @@ fn build_cli_options(opts: RunOptions) -> std::result::Result<CliOptions, String
         strict_plugin: opts
             .strict_plugin
             .unwrap_or_else(|| "typescript-strict-plugin".to_string()),
-        mode,
         max_diagnostics: opts.max_diagnostics.filter(|n| *n > 0).map(|n| n as usize),
         cwd,
         subset_inputs: opts.subset.unwrap_or_default(),
@@ -163,7 +148,6 @@ mod tests {
             project: None,
             cwd: Some("/tmp/proj".to_string()),
             strict_plugin: None,
-            mode: None,
             subset: None,
             max_diagnostics: None,
             pretty: None,
@@ -178,26 +162,9 @@ mod tests {
         assert_eq!(cli.pretty, None);
         assert!(cli.trace_performance);
         assert_eq!(cli.strict_plugin, "typescript-strict-plugin");
-        assert!(matches!(cli.mode, Mode::Exact));
         assert_eq!(cli.max_diagnostics, None);
         assert_eq!(cli.cwd.as_str(), "/tmp/proj");
         assert!(cli.subset_inputs.is_empty());
-    }
-
-    #[test]
-    fn mode_fast_is_accepted() {
-        let mut opts = base_options();
-        opts.mode = Some("fast".into());
-        let cli = build_cli_options(opts).unwrap();
-        assert!(matches!(cli.mode, Mode::Fast));
-    }
-
-    #[test]
-    fn invalid_mode_is_rejected() {
-        let mut opts = base_options();
-        opts.mode = Some("turbo".into());
-        let err = build_cli_options(opts).unwrap_err();
-        assert!(err.contains("invalid mode 'turbo'"));
     }
 
     #[test]

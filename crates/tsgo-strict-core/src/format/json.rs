@@ -1,10 +1,8 @@
 use crate::diagnostics::Diagnostic;
-use crate::options::Mode;
 use serde::Serialize;
 
 #[derive(Serialize)]
 struct JsonOutput<'a> {
-    mode: &'static str,
     #[serde(rename = "errorCount")]
     error_count: usize,
     diagnostics: Vec<DiagOut<'a>>,
@@ -35,7 +33,6 @@ pub struct JsonFormatted {
 
 pub fn format_json_output(
     diagnostics: &[Diagnostic],
-    mode: Mode,
     max_diagnostics: Option<usize>,
 ) -> JsonFormatted {
     let total_count = diagnostics.len();
@@ -59,7 +56,6 @@ pub fn format_json_output(
         .collect();
 
     let output = JsonOutput {
-        mode: mode.as_str(),
         error_count: total_count,
         diagnostics: diag_out,
         truncated,

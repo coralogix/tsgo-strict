@@ -20,7 +20,6 @@ pub struct RunInput<'a> {
     pub project_path: &'a Utf8PathBuf,
     pub raw_config: &'a serde_json::Value,
     pub files: &'a [Utf8PathBuf],
-    pub strict_enabled: bool,
     pub pretty: Option<bool>,
     pub binary: &'a Utf8PathBuf,
 }
@@ -31,7 +30,6 @@ pub fn run_tsgo(input: RunInput<'_>) -> Result<TsgoRunResult, Error> {
         input.project_path,
         input.raw_config,
         input.files,
-        input.strict_enabled,
     )?;
 
     let started = Instant::now();
@@ -66,9 +64,8 @@ pub fn run_tsgo(input: RunInput<'_>) -> Result<TsgoRunResult, Error> {
 /// Default tsgo's `--pretty` to `false` so its output is one diagnostic per
 /// line — no code-frame snippets, no "Found N errors in M files" summary
 /// block. Those lines would be mis-parsed as continuation text of the
-/// preceding diagnostic, corrupting diff keys in `--mode exact` and pulling
-/// non-strict-only errors into the final report. Callers can explicitly pass
-/// `--pretty` to accept that tradeoff.
+/// preceding diagnostic. Callers can explicitly pass `--pretty` to accept
+/// that tradeoff.
 fn child_pretty_arg(opt: Option<bool>) -> &'static str {
     if opt == Some(true) {
         "true"

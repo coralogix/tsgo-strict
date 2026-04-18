@@ -3,7 +3,6 @@
 // The runtime surface is implemented in `index.js` and backed by a native
 // N-API addon shipped in `@tsgo-strict/<triple>` platform subpackages.
 
-export type Mode = 'exact' | 'fast';
 export type Category = 'error' | 'warning' | 'message';
 
 export interface RunOptions {
@@ -13,8 +12,6 @@ export interface RunOptions {
   cwd?: string;
   /** Plugin name to look up in `compilerOptions.plugins`. Defaults to `typescript-strict-plugin`. */
   strictPlugin?: string;
-  /** `exact` runs a baseline+strict diff; `fast` runs strict only. Defaults to `exact`. */
-  mode?: Mode;
   /** Restrict the check to these files or directories. Empty / omitted means the full project. */
   subset?: string[];
   /** Cap on number of diagnostics returned. `0` or omitted disables the cap. */
@@ -42,7 +39,6 @@ export interface RunTiming {
 }
 
 export interface RunResult {
-  mode: Mode;
   /** Total diagnostic count before truncation. */
   errorCount: number;
   /** `0` clean, `1` strict errors, `2` internal failure. */
