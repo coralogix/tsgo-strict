@@ -8,9 +8,10 @@ import assert from 'node:assert/strict';
 import path from 'node:path';
 import os from 'node:os';
 import { fileURLToPath } from 'node:url';
-import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync, copyFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 
-import { run, resolveNativeAddon, pickPackage } from '../index.js';
+import { run } from '../index.js';
+import { pickPackage, resolveNativeAddon } from '../lib/resolve.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const FIXTURE = path.join(__dirname, 'fixtures', 'basic');
@@ -39,7 +40,6 @@ test('full project run reports strict errors only from in-scope paths', { skip: 
 
   assert.equal(typeof result.errorCount, 'number');
   assert.ok(result.errorCount > 0, 'expected strict errors from src/in-scope');
-  assert.equal(result.truncated, false);
   assert.equal(result.exitCode, 1);
 
   for (const d of result.diagnostics) {
@@ -76,21 +76,6 @@ test('run populates per-phase timings', { skip: !addonReady }, async () => {
     assert.equal(typeof t.durationMs, 'number');
     assert.ok(t.durationMs >= 0);
   }
-});
-
-test('maxDiagnostics clips the diagnostics array and flags truncated', { skip: !addonReady }, async () => {
-  const baseline = await run({ project: path.join(FIXTURE, 'tsconfig.json'), cwd: FIXTURE });
-  if (baseline.errorCount < 2) return; // nothing to truncate
-
-  const clipped = await run({
-    project: path.join(FIXTURE, 'tsconfig.json'),
-    cwd: FIXTURE,
-    maxDiagnostics: 1,
-  });
-
-  assert.equal(clipped.errorCount, baseline.errorCount);
-  assert.equal(clipped.diagnostics.length, 1);
-  assert.equal(clipped.truncated, true);
 });
 
 test('pragmas override plugin path membership', { skip: !addonReady }, async () => {

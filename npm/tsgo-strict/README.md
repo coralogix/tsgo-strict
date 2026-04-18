@@ -17,10 +17,7 @@ The correct native binary and addon for your platform are installed automaticall
 ```sh
 tsgo-strict --project tsconfig.json
 tsgo-strict src/feature   # run strict check only against this subtree
-tsgo-strict --json        # JSON output
 ```
-
-See `tsgo-strict --help` for all flags.
 
 ## Programmatic API
 

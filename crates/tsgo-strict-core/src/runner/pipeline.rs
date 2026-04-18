@@ -3,34 +3,34 @@ use crate::config::load_project_context;
 use crate::diagnostics::{Category, Diagnostic};
 use crate::errors::Error;
 use crate::files::{enumerate_project_files, find_strict_candidates, resolve_subset_inputs};
-use crate::format::{format_json_output, format_text_output};
+use crate::format::format_text_output;
 use crate::options::CliOptions;
 use crate::perf::{Timer, TimerEntry};
 use crate::runner::spawn::{run_tsgo, RunInput};
 use camino::Utf8PathBuf;
 use std::collections::HashSet;
 
+const STRICT_PLUGIN_NAME: &str = "typescript-strict-plugin";
+
 pub struct RunOutcome {
     pub stdout: String,
-    pub stderr_timings: Option<String>,
     pub exit_code: i32,
 }
 
 /// Structured result suitable for programmatic consumers (the N-API addon,
-/// integration tests). Same pipeline as [`run`], minus text/JSON formatting —
+/// integration tests). Same pipeline as [`run`], minus text formatting —
 /// the caller renders as needed.
 pub struct StructuredOutcome {
     pub diagnostics: Vec<Diagnostic>,
     pub timings: Vec<TimerEntry>,
     pub exit_code: i32,
-    pub max_diagnostics: Option<usize>,
 }
 
 pub fn run_structured(options: &CliOptions) -> Result<StructuredOutcome, Error> {
     let mut timer = Timer::new();
 
     timer.start("config-load");
-    let context = load_project_context(&options.cwd, &options.project, &options.strict_plugin)?;
+    let context = load_project_context(&options.cwd, &options.project, STRICT_PLUGIN_NAME)?;
     timer.end("config-load");
 
     timer.start("file-resolution");
@@ -59,7 +59,6 @@ pub fn run_structured(options: &CliOptions) -> Result<StructuredOutcome, Error> 
             diagnostics: Vec::new(),
             timings: timer.entries().to_vec(),
             exit_code: 0,
-            max_diagnostics: options.max_diagnostics,
         });
     }
 
@@ -71,7 +70,6 @@ pub fn run_structured(options: &CliOptions) -> Result<StructuredOutcome, Error> 
         project_path: &context.project_path,
         raw_config: &context.raw_config,
         files: &effective_targets,
-        pretty: options.pretty,
         binary: &binary,
     })?;
     timer.end("strict-run");
@@ -89,33 +87,14 @@ pub fn run_structured(options: &CliOptions) -> Result<StructuredOutcome, Error> 
         diagnostics: errors,
         timings: timer.entries().to_vec(),
         exit_code,
-        max_diagnostics: options.max_diagnostics,
     })
 }
 
 pub fn run(options: &CliOptions) -> Result<RunOutcome, Error> {
     let structured = run_structured(options)?;
-
-    let mut timer = Timer::from_entries(structured.timings.clone());
-
-    timer.start("formatting");
-    let body = if options.json {
-        format_json_output(&structured.diagnostics, structured.max_diagnostics).text
-    } else {
-        format_text_output(
-            &structured.diagnostics,
-            &options.cwd,
-            structured.max_diagnostics,
-        )
-        .text
-    };
-    timer.end("formatting");
-
-    let stderr_timings = options.trace_performance.then(|| render_timings(&timer));
-
+    let body = format_text_output(&structured.diagnostics, &options.cwd).text;
     Ok(RunOutcome {
         stdout: format!("{body}\n"),
-        stderr_timings,
         exit_code: structured.exit_code,
     })
 }
@@ -148,18 +127,6 @@ fn filter_to_targets(diagnostics: Vec<Diagnostic>, targets: &[Utf8PathBuf]) -> V
 
 fn normalize(path: &Utf8PathBuf) -> String {
     path.as_str().replace('\\', "/").to_ascii_lowercase()
-}
-
-fn render_timings(timer: &Timer) -> String {
-    let entries = timer.entries();
-    if entries.is_empty() {
-        return String::new();
-    }
-    let mut out = String::from("Performance timings (ms):\n");
-    for e in entries {
-        out.push_str(&format!("  {}: {}\n", e.label, e.duration_ms));
-    }
-    out
 }
 
 #[cfg(test)]

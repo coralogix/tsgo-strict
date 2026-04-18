@@ -13,7 +13,7 @@ phase is a floor neither implementation can beat.
 | Full project                    | 3749 | 1514 | 2.48× |
 | Subset `src/batch-00`           | 1436 | 1235 | 1.16× |
 
-## Phase breakdown (single `--trace-performance` run)
+## Phase breakdown (single run, timings collected via the programmatic API)
 
 ### Full project
 

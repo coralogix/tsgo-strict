@@ -16,7 +16,6 @@ resolved via `optionalDependencies`).
 - Supports checking an explicit subset of files or globs.
 - Runs `tsgo` once with the 14 strict-family flags enabled, scoped to the
   selected files, and reports the diagnostics it produces.
-- Emits `tsc`-style text output or JSON.
 
 ## Why you'd use it
 
@@ -49,8 +48,8 @@ and its errors are filtered out of the output.
 3. **Writes a temporary tsconfig** that `extends` yours with the 14
    strict-family flags enabled and pinned to the selected files.
 4. **Spawns `tsgo`** once against that config and collects diagnostics.
-5. **Formats and prints** the result in `tsc`-style text or JSON, sorted for
-   stable output, with an exit code reflecting whether anything remained.
+5. **Prints** the result in `tsc`-style text, sorted for stable output, with
+   an exit code reflecting whether anything remained.
 
 ## Configure strict scope
 
@@ -106,12 +105,6 @@ tsgo-strict [fileOrGlob ...]
 Options:
 
 - `-p, --project <path>` — tsconfig path (default `tsconfig.json`)
-- `--json` — JSON diagnostics
-- `--pretty` / `--no-pretty` — forward pretty output to tsgo
-- `--trace-performance` — per-phase timings on stderr
-- `--strict-plugin <name>` — plugin name (default `typescript-strict-plugin`)
-- `--max-diagnostics <n>` — cap the diagnostic output
-- `--cwd <path>` — override working directory
 
 Exit codes:
 
@@ -136,8 +129,8 @@ const result = await run({
 console.log(result.errorCount, result.diagnostics);
 ```
 
-Returns `{ errorCount, exitCode, truncated, diagnostics[], timings[] }`.
-Full type definitions ship with the package.
+Returns `{ errorCount, exitCode, diagnostics[], timings[] }`. Full type
+definitions ship with the package.
 
 ## Development
 

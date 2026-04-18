@@ -20,7 +20,6 @@ pub struct RunInput<'a> {
     pub project_path: &'a Utf8PathBuf,
     pub raw_config: &'a serde_json::Value,
     pub files: &'a [Utf8PathBuf],
-    pub pretty: Option<bool>,
     pub binary: &'a Utf8PathBuf,
 }
 
@@ -33,10 +32,13 @@ pub fn run_tsgo(input: RunInput<'_>) -> Result<TsgoRunResult, Error> {
     )?;
 
     let started = Instant::now();
-    let pretty = child_pretty_arg(input.pretty);
 
+    // Force `--pretty false` so tsgo's output is one diagnostic per line —
+    // no code-frame snippets, no "Found N errors in M files" summary block.
+    // Pretty output would be mis-parsed as continuation text of the preceding
+    // diagnostic, corrupting the final report.
     let mut cmd = Command::new(input.binary.as_std_path());
-    cmd.args(["--noEmit", "--pretty", pretty, "-p", temp.path.as_str()])
+    cmd.args(["--noEmit", "--pretty", "false", "-p", temp.path.as_str()])
         .current_dir(input.cwd.as_std_path())
         .env("NO_COLOR", "1")
         .env("FORCE_COLOR", "0");
@@ -59,37 +61,4 @@ pub fn run_tsgo(input: RunInput<'_>) -> Result<TsgoRunResult, Error> {
         exit_code,
         duration_ms,
     })
-}
-
-/// Default tsgo's `--pretty` to `false` so its output is one diagnostic per
-/// line — no code-frame snippets, no "Found N errors in M files" summary
-/// block. Those lines would be mis-parsed as continuation text of the
-/// preceding diagnostic. Callers can explicitly pass `--pretty` to accept
-/// that tradeoff.
-fn child_pretty_arg(opt: Option<bool>) -> &'static str {
-    if opt == Some(true) {
-        "true"
-    } else {
-        "false"
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn pretty_defaults_to_false_when_unspecified() {
-        assert_eq!(child_pretty_arg(None), "false");
-    }
-
-    #[test]
-    fn pretty_false_stays_false() {
-        assert_eq!(child_pretty_arg(Some(false)), "false");
-    }
-
-    #[test]
-    fn pretty_true_is_honored() {
-        assert_eq!(child_pretty_arg(Some(true)), "true");
-    }
 }
