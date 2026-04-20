@@ -20,6 +20,8 @@ const EXCLUDE_PATTERN_FIXTURE = path.join(__dirname, 'fixtures', 'exclude-patter
 const EXTENDS_PLUGIN_FIXTURE = path.join(__dirname, 'fixtures', 'extends-plugin');
 const EXTENDS_EXCLUDE_FIXTURE = path.join(__dirname, 'fixtures', 'extends-exclude');
 const TSCONFIG_EXCLUDE_FIXTURE = path.join(__dirname, 'fixtures', 'tsconfig-exclude');
+const BASE_URL_FIXTURE = path.join(__dirname, 'fixtures', 'base-url');
+const BASE_URL_INHERITED_FIXTURE = path.join(__dirname, 'fixtures', 'base-url-inherited');
 const REPO_ROOT = path.resolve(__dirname, '..', '..', '..');
 
 // Skip the full suite when the platform addon hasn't been staged. This keeps
@@ -218,6 +220,33 @@ test('tsconfig exclude skips file-specific and glob exclude entries', { skip: !a
     assert.ok(!d.file?.includes('test-setup'), `test-setup.ts should be excluded: ${d.file}`);
     assert.ok(!d.file?.includes('.spec.'), `spec file should be excluded: ${d.file}`);
   }
+});
+
+test('baseUrl config does not cause silent TS5102 failure', { skip: !addonReady }, async () => {
+  // baseUrl: "." triggers TS5102 in tsgo — normalization should strip it
+  const result = await run({
+    project: path.join(BASE_URL_FIXTURE, 'tsconfig.json'),
+    cwd: BASE_URL_FIXTURE,
+  });
+  assert.ok(result.errorCount > 0, 'expected strict errors, not silent pass');
+  assert.equal(result.exitCode, 1);
+  assert.ok(
+    result.diagnostics.some((d) => d.file?.endsWith('bad.ts')),
+    `expected diagnostic from bad.ts, got: ${result.diagnostics.map((d) => d.file).join(', ')}`,
+  );
+});
+
+test('baseUrl inherited via extends is normalized', { skip: !addonReady }, async () => {
+  const result = await run({
+    project: path.join(BASE_URL_INHERITED_FIXTURE, 'tsconfig.json'),
+    cwd: BASE_URL_INHERITED_FIXTURE,
+  });
+  assert.ok(result.errorCount > 0, 'expected strict errors despite inherited baseUrl');
+  assert.equal(result.exitCode, 1);
+  assert.ok(
+    result.diagnostics.some((d) => d.file?.endsWith('bad.ts')),
+    `expected diagnostic from bad.ts, got: ${result.diagnostics.map((d) => d.file).join(', ')}`,
+  );
 });
 
 test('nested cwd walks up to the repo node_modules/.bin/tsgo', { skip: !addonReady }, async () => {

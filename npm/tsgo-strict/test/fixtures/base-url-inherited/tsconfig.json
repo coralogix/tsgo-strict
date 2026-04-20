@@ -1,0 +1,7 @@
+{
+  "extends": "./base.json",
+  "compilerOptions": {
+    "plugins": [{ "name": "typescript-strict-plugin", "paths": ["src"] }]
+  },
+  "include": ["src/**/*"]
+}
