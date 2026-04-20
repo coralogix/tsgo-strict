@@ -22,6 +22,7 @@ const EXTENDS_EXCLUDE_FIXTURE = path.join(__dirname, 'fixtures', 'extends-exclud
 const TSCONFIG_EXCLUDE_FIXTURE = path.join(__dirname, 'fixtures', 'tsconfig-exclude');
 const BASE_URL_FIXTURE = path.join(__dirname, 'fixtures', 'base-url');
 const BASE_URL_INHERITED_FIXTURE = path.join(__dirname, 'fixtures', 'base-url-inherited');
+const SOLUTION_STYLE_FIXTURE = path.join(__dirname, 'fixtures', 'solution-style');
 const REPO_ROOT = path.resolve(__dirname, '..', '..', '..');
 
 // Skip the full suite when the platform addon hasn't been staged. This keeps
@@ -255,4 +256,22 @@ test('nested cwd walks up to the repo node_modules/.bin/tsgo', { skip: !addonRea
   // basic/`, four levels below the only `node_modules/.bin/tsgo` in the tree.
   const result = await run({ project: path.join(FIXTURE, 'tsconfig.json'), cwd: FIXTURE });
   assert.ok(result.errorCount > 0);
+});
+
+test('solution-style files:[] parent does not block child include', { skip: !addonReady }, async () => {
+  // In Nx/Angular monorepos a "solution config" has files: [] + references.
+  // Libs extend it and add their own include. The parent's empty files must
+  // not short-circuit file enumeration in the child.
+  const libDir = path.join(SOLUTION_STYLE_FIXTURE, 'libs', 'foo');
+  const result = await run({
+    project: path.join(libDir, 'tsconfig.lib.json'),
+    cwd: libDir,
+  });
+
+  assert.ok(result.errorCount > 0, `expected strict errors from bad.ts, got errorCount=${result.errorCount}`);
+  assert.equal(result.exitCode, 1);
+  assert.ok(
+    result.diagnostics.some((d) => d.file && d.file.endsWith(path.join('src', 'bad.ts'))),
+    `expected diagnostic from src/bad.ts, got: ${result.diagnostics.map((d) => d.file).join(', ')}`,
+  );
 });
