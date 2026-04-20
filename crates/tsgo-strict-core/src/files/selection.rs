@@ -127,7 +127,7 @@ fn compile_path_prefixes(
 
 /// Collapse `.` and `..` segments and duplicate slashes from a posix path,
 /// mirroring `path.resolve`'s cleanup. Doesn't touch the filesystem.
-fn posix_resolve(path: &str) -> String {
+pub(crate) fn posix_resolve(path: &str) -> String {
     let absolute = path.starts_with('/');
     let drive = path
         .as_bytes()
@@ -233,11 +233,11 @@ fn to_posix(file: &Utf8Path) -> String {
     path_to_posix(file.as_str())
 }
 
-fn path_to_posix(s: &str) -> String {
+pub(crate) fn path_to_posix(s: &str) -> String {
     s.replace('\\', "/")
 }
 
-fn is_absolute_posix(s: &str) -> bool {
+pub(crate) fn is_absolute_posix(s: &str) -> bool {
     s.starts_with('/') || s.as_bytes().get(1).map(|&b| b == b':').unwrap_or(false)
 }
 

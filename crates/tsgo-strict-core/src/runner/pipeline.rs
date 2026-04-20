@@ -4,6 +4,7 @@ use crate::diagnostics::{Category, Diagnostic};
 use crate::errors::Error;
 use crate::files::{
     build_glob_set, enumerate_project_files, find_strict_candidates, resolve_subset_inputs,
+    walk_plugin_paths,
 };
 use crate::format::format_text_output;
 use crate::options::CliOptions;
@@ -42,7 +43,34 @@ pub fn run_structured(options: &CliOptions) -> Result<StructuredOutcome, Error> 
     // project tsconfig include set would be wasted work. When no subset is
     // given, we enumerate from the tsconfig.
     let project_files: Vec<Utf8PathBuf> = if subset_files.is_empty() {
-        enumerate_project_files(&context)?.files
+        let mut files = enumerate_project_files(&context)?.files;
+
+        // When plugin `paths` are configured, walk those directories to discover
+        // transitively-imported files that may not appear in `files: [...]`.
+        if let Some(ref plugin_cfg) = context.strict_plugin_config {
+            if let Some(ref paths) = plugin_cfg.paths {
+                if !paths.is_empty() {
+                    let (exclude_patterns, exclude_base) = match &context.resolved_exclude {
+                        Some(f) => (f.patterns.clone(), f.config_dir.clone()),
+                        None => (Vec::new(), context.config_dir.clone()),
+                    };
+                    let walked = walk_plugin_paths(
+                        paths,
+                        &context.config_dir,
+                        &exclude_patterns,
+                        &exclude_base,
+                    )?;
+                    let existing: HashSet<String> = files.iter().map(normalize).collect();
+                    for f in walked {
+                        if !existing.contains(&normalize(&f)) {
+                            files.push(f);
+                        }
+                    }
+                }
+            }
+        }
+
+        files
     } else {
         // Even for subset files, honour the tsconfig exclude so that
         // explicitly excluded files (e.g. test-setup.ts) are not checked.
@@ -292,5 +320,14 @@ mod tests {
         let err = check_tsgo_result(&r).unwrap_err();
         let msg = err.to_string();
         assert!(msg.contains("exit code 2"), "got: {msg}");
+    }
+
+    #[test]
+    fn normalize_deduplicates_case_and_separators() {
+        let a = Utf8PathBuf::from("/proj/src/Foo.ts");
+        let b = Utf8PathBuf::from("/proj/src/foo.ts");
+        let c = Utf8PathBuf::from(r"\proj\src\foo.ts");
+        assert_eq!(normalize(&a), normalize(&b));
+        assert_eq!(normalize(&b), normalize(&c));
     }
 }

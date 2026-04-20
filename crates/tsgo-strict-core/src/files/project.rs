@@ -1,5 +1,6 @@
 use crate::config::ProjectContext;
 use crate::errors::Error;
+use crate::files::selection::{is_absolute_posix, path_to_posix, posix_resolve};
 use camino::Utf8PathBuf;
 use globset::{Glob, GlobSetBuilder};
 use ignore::WalkBuilder;
@@ -88,6 +89,87 @@ pub fn enumerate_project_files(ctx: &ProjectContext) -> Result<ProjectScope, Err
     }
 
     Ok(ProjectScope { files })
+}
+
+/// Walk directories specified in the plugin's `paths` config to discover all
+/// TS files. This ensures transitively-imported files are included in the
+/// project scope even when the tsconfig uses `files: [...]` instead of `include`.
+pub fn walk_plugin_paths(
+    paths: &[String],
+    config_dir: &Utf8PathBuf,
+    exclude_patterns: &[String],
+    exclude_base: &Utf8PathBuf,
+) -> Result<Vec<Utf8PathBuf>, Error> {
+    let base_posix = path_to_posix(config_dir.as_str());
+
+    let resolved_dirs: Vec<Utf8PathBuf> = paths
+        .iter()
+        .filter_map(|p| {
+            let normalized = path_to_posix(p);
+            let joined = if is_absolute_posix(&normalized) {
+                normalized
+            } else {
+                format!("{}/{}", base_posix.trim_end_matches('/'), normalized)
+            };
+            let resolved = posix_resolve(&joined);
+            let dir = Utf8PathBuf::from(&resolved);
+            if dir.exists() {
+                Some(dir)
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    if resolved_dirs.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let all_exclude: Vec<String> = exclude_patterns
+        .iter()
+        .cloned()
+        .chain(DEFAULT_IGNORE.iter().map(|s| s.to_string()))
+        .collect();
+    let exclude_set = build_glob_set(&all_exclude, exclude_base)?;
+
+    let mut files: Vec<Utf8PathBuf> = Vec::new();
+    for dir in &resolved_dirs {
+        let mut builder = WalkBuilder::new(dir.as_std_path());
+        builder
+            .standard_filters(false)
+            .hidden(false)
+            .git_ignore(false)
+            .git_global(false)
+            .git_exclude(false)
+            .follow_links(false);
+
+        for result in builder.build() {
+            let entry = match result {
+                Ok(e) => e,
+                Err(_) => continue,
+            };
+            let Some(ft) = entry.file_type() else {
+                continue;
+            };
+            if !ft.is_file() {
+                continue;
+            }
+            let Ok(path) = Utf8PathBuf::try_from(entry.into_path()) else {
+                continue;
+            };
+            if !is_ts_file(&path) {
+                continue;
+            }
+            if let Some(ref excl) = exclude_set {
+                if excl.is_match(path.as_std_path()) {
+                    continue;
+                }
+            }
+            files.push(path);
+        }
+    }
+
+    Ok(files)
 }
 
 fn explicit_files_from_resolved(
@@ -334,6 +416,72 @@ mod tests {
             !names.contains(&"out.ts".to_string()),
             "should exclude shared/dist/out.ts, got: {names:?}"
         );
+    }
+
+    #[test]
+    fn walk_plugin_paths_discovers_ts_files_recursively() {
+        let tmp = tempfile::tempdir().expect("create tmpdir");
+        let root = Utf8PathBuf::try_from(tmp.path().to_path_buf()).unwrap();
+        std::fs::create_dir_all(tmp.path().join("src/lib")).unwrap();
+        std::fs::write(tmp.path().join("src/main.ts"), "export {};").unwrap();
+        std::fs::write(tmp.path().join("src/lib/util.ts"), "export {};").unwrap();
+        std::fs::write(tmp.path().join("src/lib/readme.md"), "# hi").unwrap();
+
+        let paths = vec!["./src".to_string()];
+        let result = walk_plugin_paths(&paths, &root, &[], &root).unwrap();
+        let names: Vec<&str> = result.iter().filter_map(|p| p.file_name()).collect();
+        assert!(names.contains(&"main.ts"), "got: {names:?}");
+        assert!(names.contains(&"util.ts"), "got: {names:?}");
+        assert!(!names.contains(&"readme.md"), "got: {names:?}");
+    }
+
+    #[test]
+    fn walk_plugin_paths_skips_node_modules() {
+        let tmp = tempfile::tempdir().expect("create tmpdir");
+        let root = Utf8PathBuf::try_from(tmp.path().to_path_buf()).unwrap();
+        std::fs::create_dir_all(tmp.path().join("src/node_modules/pkg")).unwrap();
+        std::fs::write(tmp.path().join("src/app.ts"), "export {};").unwrap();
+        std::fs::write(
+            tmp.path().join("src/node_modules/pkg/index.ts"),
+            "export {};",
+        )
+        .unwrap();
+
+        let paths = vec!["./src".to_string()];
+        let result = walk_plugin_paths(&paths, &root, &[], &root).unwrap();
+        let names: Vec<&str> = result.iter().filter_map(|p| p.file_name()).collect();
+        assert!(names.contains(&"app.ts"), "got: {names:?}");
+        assert!(
+            !result.iter().any(|p| p.as_str().contains("node_modules")),
+            "got: {result:?}"
+        );
+    }
+
+    #[test]
+    fn walk_plugin_paths_respects_exclude_patterns() {
+        let tmp = tempfile::tempdir().expect("create tmpdir");
+        let root = Utf8PathBuf::try_from(tmp.path().to_path_buf()).unwrap();
+        std::fs::create_dir_all(tmp.path().join("src")).unwrap();
+        std::fs::create_dir_all(tmp.path().join("dist")).unwrap();
+        std::fs::write(tmp.path().join("src/app.ts"), "export {};").unwrap();
+        std::fs::write(tmp.path().join("dist/out.ts"), "export {};").unwrap();
+
+        let paths = vec!["./src".to_string(), "./dist".to_string()];
+        let exclude = vec!["dist".to_string()];
+        let result = walk_plugin_paths(&paths, &root, &exclude, &root).unwrap();
+        let names: Vec<&str> = result.iter().filter_map(|p| p.file_name()).collect();
+        assert!(names.contains(&"app.ts"), "got: {names:?}");
+        assert!(!names.contains(&"out.ts"), "got: {names:?}");
+    }
+
+    #[test]
+    fn walk_plugin_paths_nonexistent_path_is_silent() {
+        let tmp = tempfile::tempdir().expect("create tmpdir");
+        let root = Utf8PathBuf::try_from(tmp.path().to_path_buf()).unwrap();
+
+        let paths = vec!["./does-not-exist".to_string()];
+        let result = walk_plugin_paths(&paths, &root, &[], &root).unwrap();
+        assert!(result.is_empty());
     }
 
     #[test]
