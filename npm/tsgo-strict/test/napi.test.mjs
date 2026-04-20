@@ -24,6 +24,7 @@ const BASE_URL_FIXTURE = path.join(__dirname, 'fixtures', 'base-url');
 const BASE_URL_INHERITED_FIXTURE = path.join(__dirname, 'fixtures', 'base-url-inherited');
 const SOLUTION_STYLE_FIXTURE = path.join(__dirname, 'fixtures', 'solution-style');
 const BASE_URL_PATHS_FIXTURE = path.join(__dirname, 'fixtures', 'base-url-paths');
+const FILES_ARRAY_FIXTURE = path.join(__dirname, 'fixtures', 'files-array');
 const REPO_ROOT = path.resolve(__dirname, '..', '..', '..');
 
 // Skip the full suite when the platform addon hasn't been staged. This keeps
@@ -301,5 +302,21 @@ test('baseUrl + paths with aliased imports resolves correctly from temp dir', { 
   assert.ok(
     result.diagnostics.some((d) => d.file && d.file.endsWith(path.join('src', 'use-greeter.ts'))),
     `expected diagnostic from use-greeter.ts, got: ${result.diagnostics.map((d) => d.file).join(', ')}`,
+  );
+});
+
+test('files-array tsconfig with plugin paths reports errors from transitive imports', { skip: !addonReady }, async () => {
+  const result = await run({
+    project: path.join(FILES_ARRAY_FIXTURE, 'tsconfig.json'),
+    cwd: FILES_ARRAY_FIXTURE,
+  });
+
+  // broken.ts has an implicit-any parameter — should be detected even though
+  // it is not in the tsconfig "files" array, because plugin paths walk ./src.
+  assert.ok(result.errorCount > 0, `expected strict errors from broken.ts, got errorCount=${result.errorCount}`);
+  assert.equal(result.exitCode, 1);
+  assert.ok(
+    result.diagnostics.some((d) => d.file && d.file.includes(path.join('lib', 'broken.ts'))),
+    `expected diagnostic from broken.ts, got files: ${result.diagnostics.map((d) => d.file).join(', ')}`,
   );
 });
