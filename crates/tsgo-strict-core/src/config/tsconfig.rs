@@ -68,7 +68,18 @@ pub fn load_project_context(
     let strict_plugin_config = resolve_plugin_config(&chain, plugin_name);
     let resolved_include = resolve_inherited_field(&chain, "include")?;
     let resolved_exclude = resolve_inherited_field(&chain, "exclude")?;
-    let resolved_files = resolve_inherited_field(&chain, "files")?;
+
+    // TS treats files/include as a group for inheritance. If the leaf specifies
+    // `include`, a parent's `files: []` must not short-circuit file resolution.
+    let leaf_has_include = chain
+        .last()
+        .map(|(_, cfg)| cfg.get("include").and_then(|v| v.as_array()).is_some())
+        .unwrap_or(false);
+    let resolved_files = if leaf_has_include {
+        resolve_leaf_only_field(&chain, "files")?
+    } else {
+        resolve_inherited_field(&chain, "files")?
+    };
 
     let effective_base_url = resolve_effective_base_url(&chain);
     let effective_compiler_options = if effective_base_url.is_some() {
@@ -140,6 +151,33 @@ fn resolve_inherited_field(
         }
     }
     Ok(result)
+}
+
+/// Like `resolve_inherited_field`, but only checks the leaf (last) entry in
+/// the chain. Used when the leaf specifies `include` and we must not let a
+/// parent's `files: []` short-circuit file enumeration.
+fn resolve_leaf_only_field(
+    chain: &[(PathBuf, serde_json::Value)],
+    field: &str,
+) -> Result<Option<ResolvedField>, Error> {
+    if let Some((dir, cfg)) = chain.last() {
+        if let Some(arr) = cfg.get(field).and_then(|v| v.as_array()) {
+            let config_dir = Utf8PathBuf::try_from(dir.clone()).map_err(|e| {
+                Error::msg(format!(
+                    "config directory is not valid UTF-8: {}",
+                    e.into_path_buf().to_string_lossy()
+                ))
+            })?;
+            return Ok(Some(ResolvedField {
+                patterns: arr
+                    .iter()
+                    .filter_map(|e| e.as_str().map(String::from))
+                    .collect(),
+                config_dir,
+            }));
+        }
+    }
+    Ok(None)
 }
 
 fn resolve_plugin_config(
@@ -257,5 +295,48 @@ mod tests {
         let field = resolve_inherited_field(&chain, "include").unwrap().unwrap();
         assert_eq!(field.patterns, vec!["b".to_string()]);
         assert_eq!(field.config_dir, Utf8PathBuf::from("/mid"));
+    }
+
+    #[test]
+    fn parent_files_empty_does_not_block_leaf_include() {
+        // Parent has files: [], leaf has include — resolved_files should be None
+        // so that file enumeration falls through to include-based resolution.
+        let chain = vec![
+            chain_entry("/parent", json!({ "files": [] })),
+            chain_entry("/leaf", json!({ "include": ["src/**/*.ts"] })),
+        ];
+        // leaf has include → resolve_leaf_only_field for files → leaf has no files → None
+        let resolved = resolve_leaf_only_field(&chain, "files").unwrap();
+        assert!(resolved.is_none());
+        // include still resolves normally
+        let include = resolve_inherited_field(&chain, "include").unwrap().unwrap();
+        assert_eq!(include.patterns, vec!["src/**/*.ts".to_string()]);
+    }
+
+    #[test]
+    fn leaf_files_still_used_when_leaf_has_include() {
+        // Leaf has both files and include — leaf's files should be used.
+        let chain = vec![
+            chain_entry("/parent", json!({ "files": ["parent.ts"] })),
+            chain_entry(
+                "/leaf",
+                json!({ "files": ["leaf.ts"], "include": ["src/**/*.ts"] }),
+            ),
+        ];
+        let resolved = resolve_leaf_only_field(&chain, "files").unwrap().unwrap();
+        assert_eq!(resolved.patterns, vec!["leaf.ts".to_string()]);
+        assert_eq!(resolved.config_dir, Utf8PathBuf::from("/leaf"));
+    }
+
+    #[test]
+    fn parent_files_inherited_when_leaf_has_no_include() {
+        // Leaf has no include — parent's files should be inherited (existing behavior).
+        let chain = vec![
+            chain_entry("/parent", json!({ "files": ["a.ts"] })),
+            chain_entry("/leaf", json!({})),
+        ];
+        let resolved = resolve_inherited_field(&chain, "files").unwrap().unwrap();
+        assert_eq!(resolved.patterns, vec!["a.ts".to_string()]);
+        assert_eq!(resolved.config_dir, Utf8PathBuf::from("/parent"));
     }
 }
