@@ -1,6 +1,6 @@
 {
   "name": "@tsgo-strict/linux-x64-musl",
-  "version": "0.1.12",
+  "version": "0.1.13",
   "description": "Native tsgo-strict binary for Linux x64 (musl)",
   "license": "MIT",
   "repository": {
