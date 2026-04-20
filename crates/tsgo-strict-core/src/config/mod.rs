@@ -1,6 +1,7 @@
+pub mod base_url;
 pub mod extends;
 pub mod plugin;
 pub mod tsconfig;
 
 pub use plugin::StrictPluginConfig;
-pub use tsconfig::{load_project_context, ProjectContext};
+pub use tsconfig::{load_project_context, ProjectContext, ResolvedField};

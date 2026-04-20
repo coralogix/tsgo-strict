@@ -20,32 +20,32 @@ pub struct ProjectScope {
 /// filter to TS extensions, skip node_modules and .git.
 pub fn enumerate_project_files(ctx: &ProjectContext) -> Result<ProjectScope, Error> {
     // Prefer resolved fields from the extends chain; fall back to raw_config.
-    if let Some(ref files_list) = ctx.resolved_files {
-        return explicit_files_from_resolved(files_list, &ctx.config_dir);
+    if let Some(ref resolved) = ctx.resolved_files {
+        return explicit_files_from_resolved(&resolved.patterns, &resolved.config_dir);
     }
     if let Some(explicit) = explicit_files(ctx)? {
         return Ok(ProjectScope { files: explicit });
     }
 
-    let include_patterns = ctx
-        .resolved_include
-        .clone()
-        .unwrap_or_else(|| include_patterns(&ctx.raw_config));
-    let exclude_patterns = ctx
-        .resolved_exclude
-        .clone()
-        .unwrap_or_else(|| exclude_patterns(&ctx.raw_config));
+    let (include_patterns, include_base) = match ctx.resolved_include {
+        Some(ref f) => (f.patterns.clone(), f.config_dir.clone()),
+        None => (include_patterns(&ctx.raw_config), ctx.config_dir.clone()),
+    };
+    let (exclude_patterns, exclude_base) = match ctx.resolved_exclude {
+        Some(ref f) => (f.patterns.clone(), f.config_dir.clone()),
+        None => (exclude_patterns(&ctx.raw_config), ctx.config_dir.clone()),
+    };
 
-    let include_set = build_glob_set(&include_patterns, &ctx.config_dir)?;
+    let include_set = build_glob_set(&include_patterns, &include_base)?;
     let exclude_set = build_glob_set(
         &exclude_patterns
             .into_iter()
             .chain(DEFAULT_IGNORE.iter().map(|s| s.to_string()))
             .collect::<Vec<_>>(),
-        &ctx.config_dir,
+        &exclude_base,
     )?;
 
-    let mut builder = WalkBuilder::new(ctx.config_dir.as_std_path());
+    let mut builder = WalkBuilder::new(include_base.as_std_path());
     builder
         .standard_filters(false)
         .hidden(false)
@@ -201,6 +201,7 @@ fn is_ts_file(path: &Utf8PathBuf) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::tsconfig::ResolvedField;
     use std::path::Path;
 
     #[test]
@@ -274,5 +275,108 @@ mod tests {
         let base = Utf8PathBuf::from("/project");
         let patterns: Vec<String> = vec![];
         assert!(build_glob_set(&patterns, &base).unwrap().is_none());
+    }
+
+    /// Build a ProjectContext for cross-directory extends tests.
+    fn make_cross_dir_context(
+        project_dir: &std::path::Path,
+        shared_dir: &std::path::Path,
+    ) -> ProjectContext {
+        let project_dir_utf8 =
+            Utf8PathBuf::try_from(project_dir.to_path_buf()).expect("utf8 project dir");
+        let shared_dir_utf8 =
+            Utf8PathBuf::try_from(shared_dir.to_path_buf()).expect("utf8 shared dir");
+        ProjectContext {
+            cwd: project_dir_utf8.clone(),
+            project_path: project_dir_utf8.join("tsconfig.json"),
+            config_dir: project_dir_utf8,
+            raw_config: serde_json::json!({}),
+            strict_plugin_config: None,
+            resolved_include: Some(ResolvedField {
+                patterns: vec!["src/**/*".to_string()],
+                config_dir: shared_dir_utf8.clone(),
+            }),
+            resolved_exclude: Some(ResolvedField {
+                patterns: vec!["dist".to_string()],
+                config_dir: shared_dir_utf8,
+            }),
+            resolved_files: None,
+            effective_base_url: None,
+            effective_compiler_options: None,
+        }
+    }
+
+    #[test]
+    fn cross_directory_extends_resolves_globs_relative_to_base() {
+        let tmp = tempfile::tempdir().expect("create tmpdir");
+        let shared = tmp.path().join("shared");
+        let project = tmp.path().join("project");
+        std::fs::create_dir_all(shared.join("src")).unwrap();
+        std::fs::create_dir_all(shared.join("dist")).unwrap();
+        std::fs::create_dir_all(&project).unwrap();
+
+        std::fs::write(shared.join("src/lib.ts"), "export const x = 1;").unwrap();
+        std::fs::write(shared.join("dist/out.ts"), "export const y = 2;").unwrap();
+
+        let ctx = make_cross_dir_context(&project, &shared);
+        let scope = enumerate_project_files(&ctx).expect("enumerate");
+
+        let names: Vec<String> = scope
+            .files
+            .iter()
+            .map(|p| p.file_name().unwrap_or("").to_string())
+            .collect();
+        assert!(
+            names.contains(&"lib.ts".to_string()),
+            "should include shared/src/lib.ts, got: {names:?}"
+        );
+        assert!(
+            !names.contains(&"out.ts".to_string()),
+            "should exclude shared/dist/out.ts, got: {names:?}"
+        );
+    }
+
+    #[test]
+    fn leaf_override_resolves_globs_relative_to_leaf() {
+        let tmp = tempfile::tempdir().expect("create tmpdir");
+        let shared = tmp.path().join("shared");
+        let project = tmp.path().join("project");
+        std::fs::create_dir_all(shared.join("src")).unwrap();
+        std::fs::create_dir_all(project.join("src")).unwrap();
+
+        std::fs::write(shared.join("src/base.ts"), "export const a = 1;").unwrap();
+        std::fs::write(project.join("src/leaf.ts"), "export const b = 2;").unwrap();
+
+        let project_utf8 = Utf8PathBuf::try_from(project.clone()).expect("utf8 project dir");
+        let ctx = ProjectContext {
+            cwd: project_utf8.clone(),
+            project_path: project_utf8.join("tsconfig.json"),
+            config_dir: project_utf8.clone(),
+            raw_config: serde_json::json!({}),
+            strict_plugin_config: None,
+            resolved_include: Some(ResolvedField {
+                patterns: vec!["src/**/*".to_string()],
+                config_dir: project_utf8,
+            }),
+            resolved_exclude: None,
+            resolved_files: None,
+            effective_base_url: None,
+            effective_compiler_options: None,
+        };
+
+        let scope = enumerate_project_files(&ctx).expect("enumerate");
+        let names: Vec<String> = scope
+            .files
+            .iter()
+            .map(|p| p.file_name().unwrap_or("").to_string())
+            .collect();
+        assert!(
+            names.contains(&"leaf.ts".to_string()),
+            "should include project/src/leaf.ts, got: {names:?}"
+        );
+        assert!(
+            !names.contains(&"base.ts".to_string()),
+            "should NOT include shared/src/base.ts, got: {names:?}"
+        );
     }
 }

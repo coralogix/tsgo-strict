@@ -27,7 +27,7 @@ tempfile = "3"
 which = "7"
 strip-ansi-escapes = "0.2"
 camino = { version = "1", features = ["serde1"] }
-pathdiff = "0.2"
+pathdiff = { version = "0.2", features = ["camino"] }
 
 [profile.release]
 lto = "thin"

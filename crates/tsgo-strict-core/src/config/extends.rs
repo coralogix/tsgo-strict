@@ -4,12 +4,14 @@ use std::path::{Path, PathBuf};
 
 use super::tsconfig::read_raw_tsconfig;
 
-/// Walk the `extends` chain starting at `project_path`, returning raw JSON values
-/// ordered from root-most ancestor (first) to the project itself (last). The last
-/// element is always the project tsconfig.
-pub fn load_extends_chain(project_path: &Path) -> Result<Vec<serde_json::Value>, Error> {
+/// Walk the `extends` chain starting at `project_path`, returning
+/// `(config_dir, raw_json)` pairs ordered from root-most ancestor (first) to
+/// the project itself (last). `config_dir` is the parent directory of each
+/// config file — needed so that inherited `include`/`exclude`/`files` globs
+/// can be resolved relative to the config that defined them.
+pub fn load_extends_chain(project_path: &Path) -> Result<Vec<(PathBuf, serde_json::Value)>, Error> {
     let mut visited: HashSet<PathBuf> = HashSet::new();
-    let mut chain: Vec<serde_json::Value> = Vec::new();
+    let mut chain: Vec<(PathBuf, serde_json::Value)> = Vec::new();
 
     let mut current: Option<PathBuf> = Some(project_path.to_path_buf());
     while let Some(path) = current {
@@ -25,7 +27,11 @@ pub fn load_extends_chain(project_path: &Path) -> Result<Vec<serde_json::Value>,
             .and_then(|v| v.as_str())
             .map(|s| s.to_string());
 
-        chain.push(value);
+        let config_dir = path
+            .parent()
+            .unwrap_or_else(|| Path::new("."))
+            .to_path_buf();
+        chain.push((config_dir, value));
 
         current = match ext {
             Some(spec) => Some(resolve_extends_path(

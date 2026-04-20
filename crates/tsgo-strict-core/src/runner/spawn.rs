@@ -21,10 +21,22 @@ pub struct RunInput<'a> {
     pub raw_config: &'a serde_json::Value,
     pub files: &'a [Utf8PathBuf],
     pub binary: &'a Utf8PathBuf,
+    /// When set, the temp config will inline all compilerOptions (without
+    /// `extends`) and rewrite paths to compensate for the removed `baseUrl`.
+    pub effective_base_url: Option<&'a Utf8PathBuf>,
+    /// Merged compilerOptions from the full extends chain. Required when
+    /// `effective_base_url` is `Some`.
+    pub effective_compiler_options: Option<&'a serde_json::Map<String, serde_json::Value>>,
 }
 
 pub fn run_tsgo(input: RunInput<'_>) -> Result<TsgoRunResult, Error> {
-    let temp: TempConfig = write_temp_config(input.project_path, input.raw_config, input.files)?;
+    let temp: TempConfig = write_temp_config(
+        input.project_path,
+        input.raw_config,
+        input.files,
+        input.effective_base_url,
+        input.effective_compiler_options,
+    )?;
 
     let started = Instant::now();
 
