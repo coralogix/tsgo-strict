@@ -17,6 +17,12 @@ pub struct ProjectContext {
     /// actually consumes.
     pub raw_config: serde_json::Value,
     pub strict_plugin_config: Option<StrictPluginConfig>,
+    /// Resolved `include` from the extends chain (last-one-to-specify-wins).
+    pub resolved_include: Option<Vec<String>>,
+    /// Resolved `exclude` from the extends chain (last-one-to-specify-wins).
+    pub resolved_exclude: Option<Vec<String>>,
+    /// Resolved `files` from the extends chain (last-one-to-specify-wins).
+    pub resolved_files: Option<Vec<String>>,
 }
 
 pub fn load_project_context(
@@ -41,6 +47,9 @@ pub fn load_project_context(
 
     let chain = load_extends_chain(project_path.as_std_path())?;
     let strict_plugin_config = resolve_plugin_config(&chain, plugin_name);
+    let resolved_include = resolve_inherited_field(&chain, "include");
+    let resolved_exclude = resolve_inherited_field(&chain, "exclude");
+    let resolved_files = resolve_inherited_field(&chain, "files");
 
     Ok(ProjectContext {
         cwd: cwd.clone(),
@@ -48,6 +57,9 @@ pub fn load_project_context(
         config_dir,
         raw_config,
         strict_plugin_config,
+        resolved_include,
+        resolved_exclude,
+        resolved_files,
     })
 }
 
@@ -71,6 +83,23 @@ fn parse_jsonc(source: &str) -> Result<serde_json::Value, String> {
     let parsed =
         parse_to_serde_value(source, &ParseOptions::default()).map_err(|e| e.to_string())?;
     Ok(parsed.unwrap_or(serde_json::Value::Null))
+}
+
+/// Walk the extends chain (root-first) and return the last-specified value for
+/// a top-level array field (`include`, `exclude`, or `files`). This matches
+/// TypeScript's own inheritance: the nearest config that specifies the field wins.
+fn resolve_inherited_field(chain: &[serde_json::Value], field: &str) -> Option<Vec<String>> {
+    let mut result: Option<Vec<String>> = None;
+    for cfg in chain {
+        if let Some(arr) = cfg.get(field).and_then(|v| v.as_array()) {
+            result = Some(
+                arr.iter()
+                    .filter_map(|e| e.as_str().map(String::from))
+                    .collect(),
+            );
+        }
+    }
+    result
 }
 
 fn resolve_plugin_config(
@@ -123,4 +152,65 @@ fn resolve_plugin_config(
         }
     }
     matched
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn inherit_include_from_base_when_leaf_omits() {
+        let chain = vec![
+            json!({ "include": ["src/**/*"] }),
+            json!({}),
+        ];
+        assert_eq!(
+            resolve_inherited_field(&chain, "include"),
+            Some(vec!["src/**/*".to_string()])
+        );
+    }
+
+    #[test]
+    fn leaf_include_overrides_base() {
+        let chain = vec![
+            json!({ "include": ["lib/**/*"] }),
+            json!({ "include": ["src/**/*"] }),
+        ];
+        assert_eq!(
+            resolve_inherited_field(&chain, "include"),
+            Some(vec!["src/**/*".to_string()])
+        );
+    }
+
+    #[test]
+    fn inherit_exclude_from_base_when_leaf_omits() {
+        let chain = vec![
+            json!({ "exclude": ["dist"] }),
+            json!({}),
+        ];
+        assert_eq!(
+            resolve_inherited_field(&chain, "exclude"),
+            Some(vec!["dist".to_string()])
+        );
+    }
+
+    #[test]
+    fn no_field_in_chain_returns_none() {
+        let chain = vec![json!({}), json!({})];
+        assert_eq!(resolve_inherited_field(&chain, "include"), None);
+    }
+
+    #[test]
+    fn three_level_chain_middle_overrides_root() {
+        let chain = vec![
+            json!({ "include": ["a"] }),
+            json!({ "include": ["b"] }),
+            json!({}),
+        ];
+        assert_eq!(
+            resolve_inherited_field(&chain, "include"),
+            Some(vec!["b".to_string()])
+        );
+    }
 }

@@ -5,6 +5,7 @@ use camino::{Utf8Path, Utf8PathBuf};
 use globset::{Glob, GlobMatcher};
 use rayon::prelude::*;
 use rayon::ThreadPool;
+use regex::Regex;
 use std::sync::OnceLock;
 
 /// Thread pool sized for I/O-bound pragma scans. The default rayon pool is
@@ -71,7 +72,7 @@ fn is_strict_file(
     file: &Utf8Path,
     plugin_config: Option<&StrictPluginConfig>,
     path_prefixes: Option<&[String]>,
-    exclude_matchers: Option<&[GlobMatcher]>,
+    exclude_matchers: Option<&[ExcludeMatcher]>,
 ) -> bool {
     let pragma = detect_pragma(file.as_std_path());
     match pragma {
@@ -167,9 +168,25 @@ fn posix_resolve(path: &str) -> String {
     .to_string()
 }
 
+/// A compiled exclude matcher that supports both glob and regex patterns.
+/// Heuristic: if the pattern contains `*` or `?`, treat as glob; otherwise regex.
+enum ExcludeMatcher {
+    Glob(GlobMatcher),
+    Regex(Regex),
+}
+
+impl ExcludeMatcher {
+    fn is_match(&self, path: &str) -> bool {
+        match self {
+            ExcludeMatcher::Glob(m) => m.is_match(path),
+            ExcludeMatcher::Regex(r) => r.is_match(path),
+        }
+    }
+}
+
 fn compile_exclude_matchers(
     plugin_config: Option<&StrictPluginConfig>,
-) -> Result<Option<Vec<GlobMatcher>>, Error> {
+) -> Result<Option<Vec<ExcludeMatcher>>, Error> {
     let Some(cfg) = plugin_config else {
         return Ok(None);
     };
@@ -178,13 +195,23 @@ fn compile_exclude_matchers(
     };
     let mut out = Vec::with_capacity(patterns.len());
     for pattern in patterns {
-        let glob = Glob::new(pattern).map_err(|e| {
-            Error::msg(format!(
-                "invalid plugin 'excludePattern' glob '{}': {}",
-                pattern, e
-            ))
-        })?;
-        out.push(glob.compile_matcher());
+        if pattern.contains('*') || pattern.contains('?') {
+            let glob = Glob::new(pattern).map_err(|e| {
+                Error::msg(format!(
+                    "invalid plugin 'excludePattern' glob '{}': {}",
+                    pattern, e
+                ))
+            })?;
+            out.push(ExcludeMatcher::Glob(glob.compile_matcher()));
+        } else {
+            let re = Regex::new(pattern).map_err(|e| {
+                Error::msg(format!(
+                    "invalid plugin 'excludePattern' regex '{}': {}",
+                    pattern, e
+                ))
+            })?;
+            out.push(ExcludeMatcher::Regex(re));
+        }
     }
     Ok(Some(out))
 }
@@ -293,5 +320,59 @@ mod tests {
         .unwrap();
         assert_eq!(matchers.len(), 2);
         assert!(matchers[1].is_match("/proj/src/__mocks__/foo.ts"));
+    }
+
+    #[test]
+    fn exclude_pattern_supports_regex_with_anchors() {
+        let matchers = compile_exclude_matchers(Some(&cfg(
+            None,
+            Some(vec![r"\.spec\.ts$", r"\.test\.ts$"]),
+        )))
+        .unwrap()
+        .unwrap();
+
+        // Should match files ending in .spec.ts / .test.ts
+        assert!(matchers[0].is_match("/proj/src/app.spec.ts"));
+        assert!(matchers[1].is_match("/proj/src/app.test.ts"));
+
+        // Should NOT match plain .ts files
+        assert!(!matchers[0].is_match("/proj/src/app.ts"));
+        assert!(!matchers[1].is_match("/proj/src/app.ts"));
+
+        // Should NOT match partial (spec.ts without the dot)
+        assert!(!matchers[0].is_match("/proj/src/myspec.ts"));
+    }
+
+    #[test]
+    fn exclude_pattern_mixes_glob_and_regex() {
+        let matchers = compile_exclude_matchers(Some(&cfg(
+            None,
+            Some(vec!["**/__mocks__/**", r"\.stories\.ts$"]),
+        )))
+        .unwrap()
+        .unwrap();
+
+        // Glob matcher works
+        assert!(matchers[0].is_match("/proj/src/__mocks__/foo.ts"));
+        assert!(!matchers[0].is_match("/proj/src/foo.ts"));
+
+        // Regex matcher works
+        assert!(matchers[1].is_match("/proj/src/Button.stories.ts"));
+        assert!(!matchers[1].is_match("/proj/src/Button.ts"));
+    }
+
+    #[test]
+    fn exclude_pattern_regex_substring_match() {
+        let matchers = compile_exclude_matchers(Some(&cfg(
+            None,
+            Some(vec!["test-setup"]),
+        )))
+        .unwrap()
+        .unwrap();
+
+        // Regex substring match (no anchors)
+        assert!(matchers[0].is_match("/proj/src/test-setup.ts"));
+        assert!(matchers[0].is_match("/proj/src/deep/test-setup.config.ts"));
+        assert!(!matchers[0].is_match("/proj/src/app.ts"));
     }
 }

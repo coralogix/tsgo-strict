@@ -16,6 +16,9 @@ import { pickPackage, resolveNativeAddon } from '../lib/resolve.js';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const FIXTURE = path.join(__dirname, 'fixtures', 'basic');
 const PRAGMA_FIXTURE = path.join(__dirname, 'fixtures', 'pragmas');
+const EXCLUDE_PATTERN_FIXTURE = path.join(__dirname, 'fixtures', 'exclude-pattern');
+const EXTENDS_PLUGIN_FIXTURE = path.join(__dirname, 'fixtures', 'extends-plugin');
+const EXTENDS_EXCLUDE_FIXTURE = path.join(__dirname, 'fixtures', 'extends-exclude');
 const REPO_ROOT = path.resolve(__dirname, '..', '..', '..');
 
 // Skip the full suite when the platform addon hasn't been staged. This keeps
@@ -150,6 +153,53 @@ test('consumer-style scratch project resolves tsgo from a peer dep', { skip: !ad
     if (prevBinary === undefined) delete process.env.TSGO_BINARY;
     else process.env.TSGO_BINARY = prevBinary;
     rmSync(scratch, { recursive: true, force: true });
+  }
+});
+
+test('regex excludePattern excludes .spec/.test/.stories files', { skip: !addonReady }, async () => {
+  const result = await run({
+    project: path.join(EXCLUDE_PATTERN_FIXTURE, 'tsconfig.json'),
+    cwd: EXCLUDE_PATTERN_FIXTURE,
+  });
+
+  // Only app.ts should report errors; .spec.ts, .test.ts, .stories.ts are excluded
+  assert.ok(result.errorCount > 0, 'expected strict errors from app.ts');
+  for (const d of result.diagnostics) {
+    assert.ok(d.file, 'diagnostic should have a file');
+    assert.ok(d.file.endsWith('app.ts'), `unexpected file in diagnostics: ${d.file}`);
+    assert.ok(!d.file.includes('.spec.'), `spec file should be excluded: ${d.file}`);
+    assert.ok(!d.file.includes('.test.'), `test file should be excluded: ${d.file}`);
+    assert.ok(!d.file.includes('.stories.'), `stories file should be excluded: ${d.file}`);
+  }
+});
+
+test('plugin config inherited via extends chain', { skip: !addonReady }, async () => {
+  const result = await run({
+    project: path.join(EXTENDS_PLUGIN_FIXTURE, 'tsconfig.json'),
+    cwd: EXTENDS_PLUGIN_FIXTURE,
+  });
+
+  assert.ok(result.errorCount > 0, 'expected strict errors from src/bad.ts via inherited plugin');
+  assert.equal(result.exitCode, 1);
+  assert.ok(
+    result.diagnostics.some((d) => d.file && d.file.endsWith(path.join('src', 'bad.ts'))),
+    `expected diagnostic from src/bad.ts, got: ${result.diagnostics.map((d) => d.file).join(', ')}`,
+  );
+});
+
+test('exclude inherited via extends chain filters files', { skip: !addonReady }, async () => {
+  const result = await run({
+    project: path.join(EXTENDS_EXCLUDE_FIXTURE, 'tsconfig.json'),
+    cwd: EXTENDS_EXCLUDE_FIXTURE,
+  });
+
+  assert.ok(result.errorCount > 0, 'expected strict errors from src/app.ts');
+  for (const d of result.diagnostics) {
+    assert.ok(d.file, 'diagnostic should have a file');
+    assert.ok(
+      !d.file.includes('generated'),
+      `generated/ should be excluded via inherited exclude: ${d.file}`,
+    );
   }
 });
 

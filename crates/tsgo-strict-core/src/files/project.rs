@@ -19,12 +19,22 @@ pub struct ProjectScope {
 /// otherwise walk `include` (or the config dir if absent), subtract `exclude`,
 /// filter to TS extensions, skip node_modules and .git.
 pub fn enumerate_project_files(ctx: &ProjectContext) -> Result<ProjectScope, Error> {
+    // Prefer resolved fields from the extends chain; fall back to raw_config.
+    if let Some(ref files_list) = ctx.resolved_files {
+        return explicit_files_from_resolved(files_list, &ctx.config_dir);
+    }
     if let Some(explicit) = explicit_files(ctx)? {
         return Ok(ProjectScope { files: explicit });
     }
 
-    let include_patterns = include_patterns(&ctx.raw_config);
-    let exclude_patterns = exclude_patterns(&ctx.raw_config);
+    let include_patterns = ctx
+        .resolved_include
+        .clone()
+        .unwrap_or_else(|| include_patterns(&ctx.raw_config));
+    let exclude_patterns = ctx
+        .resolved_exclude
+        .clone()
+        .unwrap_or_else(|| exclude_patterns(&ctx.raw_config));
 
     let include_set = build_glob_set(&include_patterns, &ctx.config_dir)?;
     let exclude_set = build_glob_set(
@@ -78,6 +88,26 @@ pub fn enumerate_project_files(ctx: &ProjectContext) -> Result<ProjectScope, Err
     }
 
     Ok(ProjectScope { files })
+}
+
+fn explicit_files_from_resolved(
+    files_list: &[String],
+    config_dir: &Utf8PathBuf,
+) -> Result<ProjectScope, Error> {
+    let mut out = Vec::with_capacity(files_list.len());
+    for rel in files_list {
+        let joined = config_dir.as_std_path().join(rel);
+        match Utf8PathBuf::try_from(joined) {
+            Ok(p) => out.push(p),
+            Err(e) => {
+                return Err(Error::msg(format!(
+                    "tsconfig files entry not valid UTF-8: {}",
+                    e.into_path_buf().to_string_lossy()
+                )))
+            }
+        }
+    }
+    Ok(ProjectScope { files: out })
 }
 
 fn explicit_files(ctx: &ProjectContext) -> Result<Option<Vec<Utf8PathBuf>>, Error> {
