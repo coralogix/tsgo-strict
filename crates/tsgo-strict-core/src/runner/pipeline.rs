@@ -142,6 +142,78 @@ pub fn run_structured(options: &CliOptions) -> Result<StructuredOutcome, Error> 
     })
 }
 
+/// Resolve the list of files that would be strict-checked without actually
+/// running the type checker. Useful for debugging config/file-resolution.
+pub fn list_files(options: &CliOptions) -> Result<Vec<Utf8PathBuf>, Error> {
+    let mut timer = Timer::new();
+
+    timer.start("config-load");
+    let context = load_project_context(&options.cwd, &options.project, STRICT_PLUGIN_NAME)?;
+    timer.end("config-load");
+
+    timer.start("file-resolution");
+    let subset_files = resolve_subset_inputs(&options.subset_inputs, &options.cwd)?;
+
+    let project_files: Vec<Utf8PathBuf> = if subset_files.is_empty() {
+        let mut files = enumerate_project_files(&context)?.files;
+
+        if let Some(ref plugin_cfg) = context.strict_plugin_config {
+            if let Some(ref paths) = plugin_cfg.paths {
+                if !paths.is_empty() {
+                    let (exclude_patterns, exclude_base) = match &context.resolved_exclude {
+                        Some(f) => (f.patterns.clone(), f.config_dir.clone()),
+                        None => (Vec::new(), context.config_dir.clone()),
+                    };
+                    let walked = walk_plugin_paths(
+                        paths,
+                        &context.config_dir,
+                        &exclude_patterns,
+                        &exclude_base,
+                    )?;
+                    let existing: HashSet<String> = files.iter().map(normalize).collect();
+                    for f in walked {
+                        if !existing.contains(&normalize(&f)) {
+                            files.push(f);
+                        }
+                    }
+                }
+            }
+        }
+
+        files
+    } else {
+        let (exclude_patterns, exclude_base) = match context.resolved_exclude {
+            Some(ref f) => (f.patterns.clone(), f.config_dir.clone()),
+            None => (Vec::new(), context.config_dir.clone()),
+        };
+        if exclude_patterns.is_empty() {
+            subset_files.clone()
+        } else {
+            let exclude_set = build_glob_set(&exclude_patterns, &exclude_base)?;
+            match exclude_set {
+                Some(set) => subset_files
+                    .iter()
+                    .filter(|f| !set.is_match(f.as_std_path()))
+                    .cloned()
+                    .collect(),
+                None => subset_files.clone(),
+            }
+        }
+    };
+
+    let strict_candidates = find_strict_candidates(
+        project_files,
+        context.strict_plugin_config.as_ref(),
+        &context.config_dir,
+    )?;
+
+    let mut effective = effective_targets(&strict_candidates, &subset_files);
+    timer.end("file-resolution");
+
+    effective.sort();
+    Ok(effective)
+}
+
 pub fn run(options: &CliOptions) -> Result<RunOutcome, Error> {
     let structured = run_structured(options)?;
     let body = format_text_output(&structured.diagnostics, &options.cwd).text;

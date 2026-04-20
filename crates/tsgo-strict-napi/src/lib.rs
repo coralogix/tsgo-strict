@@ -13,7 +13,7 @@ use napi::tokio::task;
 use napi_derive::napi;
 use tsgo_strict_core::diagnostics::Category;
 use tsgo_strict_core::options::CliOptions;
-use tsgo_strict_core::run_structured;
+use tsgo_strict_core::{list_files as core_list_files, run_structured};
 
 #[napi(object)]
 pub struct RunOptions {
@@ -25,6 +25,8 @@ pub struct RunOptions {
     /// Explicit file or directory inputs to restrict the check to. Empty means
     /// full project.
     pub subset: Option<Vec<String>>,
+    /// When true, resolve the file list and return it without type-checking.
+    pub list_files: Option<bool>,
 }
 
 #[napi(object)]
@@ -49,11 +51,30 @@ pub struct RunResult {
     pub exit_code: i32,
     pub diagnostics: Vec<RunDiagnostic>,
     pub timings: Vec<RunTiming>,
+    /// Populated when `list_files` is set. Contains the resolved file paths.
+    pub files: Option<Vec<String>>,
 }
 
 #[napi]
 pub async fn run(options: RunOptions) -> Result<RunResult> {
+    let do_list_files = options.list_files.unwrap_or(false);
     let cli = build_cli_options(options);
+
+    if do_list_files {
+        let files = task::spawn_blocking(move || core_list_files(&cli))
+            .await
+            .map_err(|e| napi_err(format!("join error: {e}")))?
+            .map_err(|e| napi_err(e.to_string()))?;
+
+        return Ok(RunResult {
+            error_count: 0,
+            exit_code: 0,
+            diagnostics: Vec::new(),
+            timings: Vec::new(),
+            files: Some(files.into_iter().map(|p| p.to_string()).collect()),
+        });
+    }
+
     let outcome = task::spawn_blocking(move || run_structured(&cli))
         .await
         .map_err(|e| napi_err(format!("join error: {e}")))?
@@ -94,6 +115,7 @@ pub async fn run(options: RunOptions) -> Result<RunResult> {
         exit_code: outcome.exit_code,
         diagnostics,
         timings,
+        files: None,
     })
 }
 
@@ -111,6 +133,8 @@ fn build_cli_options(opts: RunOptions) -> CliOptions {
         project: opts.project.unwrap_or_else(|| "tsconfig.json".to_string()),
         cwd,
         subset_inputs: opts.subset.unwrap_or_default(),
+        list_files: opts.list_files.unwrap_or(false),
+        timing: false,
     }
 }
 
@@ -127,6 +151,7 @@ mod tests {
             project: None,
             cwd: Some("/tmp/proj".to_string()),
             subset: None,
+            list_files: None,
         }
     }
 

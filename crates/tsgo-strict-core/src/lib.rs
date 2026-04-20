@@ -10,4 +10,4 @@ pub mod runner;
 
 pub use errors::Error;
 pub use options::CliOptions;
-pub use runner::{run, run_structured, RunOutcome, StructuredOutcome};
+pub use runner::{list_files, run, run_structured, RunOutcome, StructuredOutcome};
