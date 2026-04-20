@@ -8,7 +8,7 @@ use crate::files::{
 use crate::format::format_text_output;
 use crate::options::CliOptions;
 use crate::perf::{Timer, TimerEntry};
-use crate::runner::spawn::{run_tsgo, RunInput};
+use crate::runner::spawn::{run_tsgo, RunInput, TsgoRunResult};
 use camino::Utf8PathBuf;
 use std::collections::HashSet;
 
@@ -46,11 +46,14 @@ pub fn run_structured(options: &CliOptions) -> Result<StructuredOutcome, Error> 
     } else {
         // Even for subset files, honour the tsconfig exclude so that
         // explicitly excluded files (e.g. test-setup.ts) are not checked.
-        let exclude_patterns = context.resolved_exclude.clone().unwrap_or_default();
+        let (exclude_patterns, exclude_base) = match context.resolved_exclude {
+            Some(ref f) => (f.patterns.clone(), f.config_dir.clone()),
+            None => (Vec::new(), context.config_dir.clone()),
+        };
         if exclude_patterns.is_empty() {
             subset_files.clone()
         } else {
-            let exclude_set = build_glob_set(&exclude_patterns, &context.config_dir)?;
+            let exclude_set = build_glob_set(&exclude_patterns, &exclude_base)?;
             match exclude_set {
                 Some(set) => subset_files
                     .iter()
@@ -88,8 +91,12 @@ pub fn run_structured(options: &CliOptions) -> Result<StructuredOutcome, Error> 
         raw_config: &context.raw_config,
         files: &effective_targets,
         binary: &binary,
+        effective_base_url: context.effective_base_url.as_ref(),
+        effective_compiler_options: context.effective_compiler_options.as_ref(),
     })?;
     timer.end("strict-run");
+
+    check_tsgo_result(&result)?;
 
     let diagnostics = filter_to_targets(result.diagnostics, &effective_targets);
 
@@ -142,6 +149,25 @@ fn filter_to_targets(diagnostics: Vec<Diagnostic>, targets: &[Utf8PathBuf]) -> V
         .collect()
 }
 
+fn check_tsgo_result(result: &TsgoRunResult) -> Result<(), Error> {
+    match result.exit_code {
+        0 => Ok(()),
+        2 if !result.diagnostics.is_empty() => Ok(()),
+        code => {
+            let stderr = result.stderr.trim();
+            let detail = if stderr.is_empty() {
+                result.stdout.trim().to_string()
+            } else {
+                stderr.to_string()
+            };
+            Err(Error::TsgoFailed {
+                exit_code: code,
+                stderr: detail,
+            })
+        }
+    }
+}
+
 fn normalize(path: &Utf8PathBuf) -> String {
     path.as_str().replace('\\', "/").to_ascii_lowercase()
 }
@@ -150,6 +176,7 @@ fn normalize(path: &Utf8PathBuf) -> String {
 mod tests {
     use super::*;
     use crate::diagnostics::Category;
+    use crate::runner::spawn::TsgoRunResult;
 
     fn mk(file: Option<&str>, code: u32) -> Diagnostic {
         Diagnostic {
@@ -213,5 +240,57 @@ mod tests {
         let subset = vec![Utf8PathBuf::from("/p/b.ts"), Utf8PathBuf::from("/p/c.ts")];
         let got = effective_targets(&candidates, &subset);
         assert_eq!(got, vec![Utf8PathBuf::from("/p/b.ts")]);
+    }
+
+    fn make_run_result(
+        exit_code: i32,
+        diagnostics: Vec<Diagnostic>,
+        stderr: &str,
+    ) -> TsgoRunResult {
+        TsgoRunResult {
+            exit_code,
+            diagnostics,
+            stdout: String::new(),
+            stderr: stderr.to_string(),
+            duration_ms: 0,
+        }
+    }
+
+    #[test]
+    fn check_tsgo_result_exit_0_is_ok() {
+        let r = make_run_result(0, vec![], "");
+        assert!(check_tsgo_result(&r).is_ok());
+    }
+
+    #[test]
+    fn check_tsgo_result_exit_2_with_diagnostics_is_ok() {
+        let r = make_run_result(2, vec![mk(Some("/p/a.ts"), 7006)], "");
+        assert!(check_tsgo_result(&r).is_ok());
+    }
+
+    #[test]
+    fn check_tsgo_result_exit_1_is_err() {
+        let r = make_run_result(1, vec![], "error TS5090: invalid option\n");
+        let err = check_tsgo_result(&r).unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("exit code 1"), "got: {msg}");
+        assert!(msg.contains("TS5090"), "got: {msg}");
+    }
+
+    #[test]
+    fn check_tsgo_result_exit_99_is_err() {
+        let r = make_run_result(99, vec![], "segfault");
+        let err = check_tsgo_result(&r).unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("exit code 99"), "got: {msg}");
+        assert!(msg.contains("segfault"), "got: {msg}");
+    }
+
+    #[test]
+    fn check_tsgo_result_exit_2_no_diagnostics_is_err() {
+        let r = make_run_result(2, vec![], "config error\n");
+        let err = check_tsgo_result(&r).unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("exit code 2"), "got: {msg}");
     }
 }

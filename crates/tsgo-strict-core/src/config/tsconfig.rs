@@ -1,9 +1,20 @@
 use crate::errors::Error;
 use camino::Utf8PathBuf;
+use serde_json::Value;
 use std::path::{Path, PathBuf};
 
+use super::base_url::{resolve_effective_base_url, resolve_effective_compiler_options};
 use super::extends::load_extends_chain;
 use super::plugin::StrictPluginConfig;
+
+/// A resolved top-level array field (`include`, `exclude`, or `files`) paired
+/// with the directory of the tsconfig that defined it. TypeScript resolves
+/// inherited globs relative to the config that specified them, not the leaf.
+#[derive(Debug, Clone)]
+pub struct ResolvedField {
+    pub patterns: Vec<String>,
+    pub config_dir: Utf8PathBuf,
+}
 
 /// The project context we build once per invocation. Mirrors the TS
 /// `ProjectContext` shape so the rest of the pipeline reads the same fields.
@@ -18,11 +29,19 @@ pub struct ProjectContext {
     pub raw_config: serde_json::Value,
     pub strict_plugin_config: Option<StrictPluginConfig>,
     /// Resolved `include` from the extends chain (last-one-to-specify-wins).
-    pub resolved_include: Option<Vec<String>>,
+    pub resolved_include: Option<ResolvedField>,
     /// Resolved `exclude` from the extends chain (last-one-to-specify-wins).
-    pub resolved_exclude: Option<Vec<String>>,
+    pub resolved_exclude: Option<ResolvedField>,
     /// Resolved `files` from the extends chain (last-one-to-specify-wins).
-    pub resolved_files: Option<Vec<String>>,
+    pub resolved_files: Option<ResolvedField>,
+    /// Absolute directory that `baseUrl` resolves to, if set anywhere in the
+    /// extends chain. When present, the temp config must inline all
+    /// compilerOptions instead of using `extends` to avoid TS5102 in tsgo.
+    pub effective_base_url: Option<Utf8PathBuf>,
+    /// Shallow-per-key merge of `compilerOptions` from the full extends chain.
+    /// Only populated when `effective_base_url` is `Some` (to avoid unnecessary
+    /// work). Used by `write_temp_config` when inlining without `extends`.
+    pub effective_compiler_options: Option<serde_json::Map<String, Value>>,
 }
 
 pub fn load_project_context(
@@ -47,9 +66,16 @@ pub fn load_project_context(
 
     let chain = load_extends_chain(project_path.as_std_path())?;
     let strict_plugin_config = resolve_plugin_config(&chain, plugin_name);
-    let resolved_include = resolve_inherited_field(&chain, "include");
-    let resolved_exclude = resolve_inherited_field(&chain, "exclude");
-    let resolved_files = resolve_inherited_field(&chain, "files");
+    let resolved_include = resolve_inherited_field(&chain, "include")?;
+    let resolved_exclude = resolve_inherited_field(&chain, "exclude")?;
+    let resolved_files = resolve_inherited_field(&chain, "files")?;
+
+    let effective_base_url = resolve_effective_base_url(&chain);
+    let effective_compiler_options = if effective_base_url.is_some() {
+        Some(resolve_effective_compiler_options(&chain))
+    } else {
+        None
+    };
 
     Ok(ProjectContext {
         cwd: cwd.clone(),
@@ -60,6 +86,8 @@ pub fn load_project_context(
         resolved_include,
         resolved_exclude,
         resolved_files,
+        effective_base_url,
+        effective_compiler_options,
     })
 }
 
@@ -86,28 +114,40 @@ fn parse_jsonc(source: &str) -> Result<serde_json::Value, String> {
 }
 
 /// Walk the extends chain (root-first) and return the last-specified value for
-/// a top-level array field (`include`, `exclude`, or `files`). This matches
-/// TypeScript's own inheritance: the nearest config that specifies the field wins.
-fn resolve_inherited_field(chain: &[serde_json::Value], field: &str) -> Option<Vec<String>> {
-    let mut result: Option<Vec<String>> = None;
-    for cfg in chain {
+/// a top-level array field (`include`, `exclude`, or `files`) together with the
+/// directory of the config that defined it. TypeScript resolves inherited globs
+/// relative to whichever config specified them, not the leaf.
+fn resolve_inherited_field(
+    chain: &[(PathBuf, serde_json::Value)],
+    field: &str,
+) -> Result<Option<ResolvedField>, Error> {
+    let mut result: Option<ResolvedField> = None;
+    for (dir, cfg) in chain {
         if let Some(arr) = cfg.get(field).and_then(|v| v.as_array()) {
-            result = Some(
-                arr.iter()
+            let config_dir = Utf8PathBuf::try_from(dir.clone()).map_err(|e| {
+                Error::msg(format!(
+                    "config directory is not valid UTF-8: {}",
+                    e.into_path_buf().to_string_lossy()
+                ))
+            })?;
+            result = Some(ResolvedField {
+                patterns: arr
+                    .iter()
                     .filter_map(|e| e.as_str().map(String::from))
                     .collect(),
-            );
+                config_dir,
+            });
         }
     }
-    result
+    Ok(result)
 }
 
 fn resolve_plugin_config(
-    chain: &[serde_json::Value],
+    chain: &[(PathBuf, serde_json::Value)],
     plugin_name: &str,
 ) -> Option<StrictPluginConfig> {
     let mut matched: Option<StrictPluginConfig> = None;
-    for cfg in chain {
+    for (_dir, cfg) in chain {
         let Some(plugins) = cfg
             .get("compilerOptions")
             .and_then(|co| co.get("plugins"))
@@ -159,52 +199,63 @@ mod tests {
     use super::*;
     use serde_json::json;
 
+    fn chain_entry(dir: &str, value: serde_json::Value) -> (PathBuf, serde_json::Value) {
+        (PathBuf::from(dir), value)
+    }
+
     #[test]
     fn inherit_include_from_base_when_leaf_omits() {
-        let chain = vec![json!({ "include": ["src/**/*"] }), json!({})];
-        assert_eq!(
-            resolve_inherited_field(&chain, "include"),
-            Some(vec!["src/**/*".to_string()])
-        );
+        let chain = vec![
+            chain_entry("/base", json!({ "include": ["src/**/*"] })),
+            chain_entry("/leaf", json!({})),
+        ];
+        let field = resolve_inherited_field(&chain, "include").unwrap().unwrap();
+        assert_eq!(field.patterns, vec!["src/**/*".to_string()]);
+        assert_eq!(field.config_dir, Utf8PathBuf::from("/base"));
     }
 
     #[test]
     fn leaf_include_overrides_base() {
         let chain = vec![
-            json!({ "include": ["lib/**/*"] }),
-            json!({ "include": ["src/**/*"] }),
+            chain_entry("/base", json!({ "include": ["lib/**/*"] })),
+            chain_entry("/leaf", json!({ "include": ["src/**/*"] })),
         ];
-        assert_eq!(
-            resolve_inherited_field(&chain, "include"),
-            Some(vec!["src/**/*".to_string()])
-        );
+        let field = resolve_inherited_field(&chain, "include").unwrap().unwrap();
+        assert_eq!(field.patterns, vec!["src/**/*".to_string()]);
+        assert_eq!(field.config_dir, Utf8PathBuf::from("/leaf"));
     }
 
     #[test]
     fn inherit_exclude_from_base_when_leaf_omits() {
-        let chain = vec![json!({ "exclude": ["dist"] }), json!({})];
-        assert_eq!(
-            resolve_inherited_field(&chain, "exclude"),
-            Some(vec!["dist".to_string()])
-        );
+        let chain = vec![
+            chain_entry("/base", json!({ "exclude": ["dist"] })),
+            chain_entry("/leaf", json!({})),
+        ];
+        let field = resolve_inherited_field(&chain, "exclude").unwrap().unwrap();
+        assert_eq!(field.patterns, vec!["dist".to_string()]);
+        assert_eq!(field.config_dir, Utf8PathBuf::from("/base"));
     }
 
     #[test]
     fn no_field_in_chain_returns_none() {
-        let chain = vec![json!({}), json!({})];
-        assert_eq!(resolve_inherited_field(&chain, "include"), None);
+        let chain = vec![
+            chain_entry("/base", json!({})),
+            chain_entry("/leaf", json!({})),
+        ];
+        assert!(resolve_inherited_field(&chain, "include")
+            .unwrap()
+            .is_none());
     }
 
     #[test]
     fn three_level_chain_middle_overrides_root() {
         let chain = vec![
-            json!({ "include": ["a"] }),
-            json!({ "include": ["b"] }),
-            json!({}),
+            chain_entry("/root", json!({ "include": ["a"] })),
+            chain_entry("/mid", json!({ "include": ["b"] })),
+            chain_entry("/leaf", json!({})),
         ];
-        assert_eq!(
-            resolve_inherited_field(&chain, "include"),
-            Some(vec!["b".to_string()])
-        );
+        let field = resolve_inherited_field(&chain, "include").unwrap().unwrap();
+        assert_eq!(field.patterns, vec!["b".to_string()]);
+        assert_eq!(field.config_dir, Utf8PathBuf::from("/mid"));
     }
 }

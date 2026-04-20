@@ -1,5 +1,7 @@
+use crate::config::base_url::normalize_base_url;
 use crate::errors::Error;
 use camino::{Utf8Path, Utf8PathBuf};
+use serde_json::Value;
 use tempfile::TempDir;
 
 /// We flip the single `strict` flag, matching the original
@@ -18,6 +20,8 @@ pub fn write_temp_config(
     project_path: &Utf8Path,
     raw_config: &serde_json::Value,
     files: &[Utf8PathBuf],
+    effective_base_url: Option<&Utf8PathBuf>,
+    effective_compiler_options: Option<&serde_json::Map<String, Value>>,
 ) -> Result<TempConfig, Error> {
     let parent = std::env::temp_dir().join("tsgo-strict");
     std::fs::create_dir_all(&parent)
@@ -36,41 +40,62 @@ pub fn write_temp_config(
 
     let config_path = dir.path().join("strict.json");
 
-    let mut compiler_options = raw_config
-        .get("compilerOptions")
-        .and_then(|v| v.as_object())
-        .cloned()
-        .unwrap_or_default();
-
-    compiler_options.insert("noEmit".to_string(), serde_json::Value::Bool(true));
-    for flag in STRICT_FAMILY_FLAGS {
-        compiler_options.insert(flag.to_string(), serde_json::Value::Bool(true));
-    }
-
     // Use absolute paths in the files array. Relative paths cause tsgo to
     // emit diagnostic paths that are difficult to map back to the original
     // file paths, especially when the temp config lives in a nested temp
     // directory.
-    let absolute_files: Vec<serde_json::Value> = files
-        .iter()
-        .map(|f| serde_json::Value::String(f.to_string()))
-        .collect();
+    let absolute_files: Vec<Value> = files.iter().map(|f| Value::String(f.to_string())).collect();
 
-    let mut root = serde_json::Map::new();
-    root.insert(
-        "extends".to_string(),
-        serde_json::Value::String(project_path.to_string()),
-    );
-    root.insert(
-        "compilerOptions".to_string(),
-        serde_json::Value::Object(compiler_options),
-    );
-    root.insert(
-        "files".to_string(),
-        serde_json::Value::Array(absolute_files),
-    );
+    let project_dir = project_path.parent().unwrap_or(Utf8Path::new("."));
 
-    let body = serde_json::to_string_pretty(&serde_json::Value::Object(root))
+    let root = if let Some(base_url_dir) = effective_base_url {
+        // baseUrl detected in the extends chain — inline all compilerOptions
+        // without `extends` to prevent TS5102 from tsgo.
+        let mut compiler_options = effective_compiler_options.cloned().unwrap_or_default();
+
+        // Apply strict overrides
+        compiler_options.insert("noEmit".to_string(), Value::Bool(true));
+        for flag in STRICT_FAMILY_FLAGS {
+            compiler_options.insert(flag.to_string(), Value::Bool(true));
+        }
+
+        // Normalize baseUrl: remove it and rewrite paths/typeRoots
+        normalize_base_url(&mut compiler_options, base_url_dir, project_dir);
+
+        let mut root = serde_json::Map::new();
+        root.insert(
+            "compilerOptions".to_string(),
+            Value::Object(compiler_options),
+        );
+        root.insert("files".to_string(), Value::Array(absolute_files));
+        root
+    } else {
+        // No baseUrl — use `extends` as before
+        let mut compiler_options = raw_config
+            .get("compilerOptions")
+            .and_then(|v| v.as_object())
+            .cloned()
+            .unwrap_or_default();
+
+        compiler_options.insert("noEmit".to_string(), Value::Bool(true));
+        for flag in STRICT_FAMILY_FLAGS {
+            compiler_options.insert(flag.to_string(), Value::Bool(true));
+        }
+
+        let mut root = serde_json::Map::new();
+        root.insert(
+            "extends".to_string(),
+            Value::String(project_path.to_string()),
+        );
+        root.insert(
+            "compilerOptions".to_string(),
+            Value::Object(compiler_options),
+        );
+        root.insert("files".to_string(), Value::Array(absolute_files));
+        root
+    };
+
+    let body = serde_json::to_string_pretty(&Value::Object(root))
         .map_err(|e| Error::msg(format!("failed to serialize temp tsconfig: {}", e)))?;
     std::fs::write(&config_path, format!("{body}\n"))
         .map_err(|e| Error::msg(format!("cannot write {}: {}", config_path.display(), e)))?;
@@ -96,7 +121,7 @@ mod tests {
             Utf8PathBuf::from("/fake/project/src/b.ts"),
         ];
 
-        let temp = write_temp_config(project_path, &raw_config, &files).unwrap();
+        let temp = write_temp_config(project_path, &raw_config, &files, None, None).unwrap();
 
         // Config is written under the system temp dir, not the project dir
         assert!(
@@ -122,5 +147,55 @@ mod tests {
             content["files"],
             serde_json::json!(["/fake/project/src/a.ts", "/fake/project/src/b.ts"])
         );
+    }
+
+    #[test]
+    fn temp_config_inlines_when_base_url_present() {
+        let project_path = Utf8Path::new("/fake/project/tsconfig.json");
+        let raw_config = serde_json::json!({
+            "compilerOptions": { "target": "ES2020", "baseUrl": ".", "paths": { "@app/*": ["src/app/*"] } }
+        });
+
+        let mut effective_co = serde_json::Map::new();
+        effective_co.insert("target".to_string(), serde_json::json!("ES2020"));
+        effective_co.insert("baseUrl".to_string(), serde_json::json!("."));
+        effective_co.insert(
+            "paths".to_string(),
+            serde_json::json!({ "@app/*": ["src/app/*"] }),
+        );
+
+        let base_url_dir = Utf8PathBuf::from("/fake/project");
+        let files = vec![Utf8PathBuf::from("/fake/project/src/a.ts")];
+
+        let temp = write_temp_config(
+            project_path,
+            &raw_config,
+            &files,
+            Some(&base_url_dir),
+            Some(&effective_co),
+        )
+        .unwrap();
+
+        let content: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&temp.path).unwrap()).unwrap();
+
+        // Should NOT have extends
+        assert!(
+            content.get("extends").is_none(),
+            "temp config should not use extends when baseUrl is present"
+        );
+        // baseUrl should be removed
+        assert!(
+            content["compilerOptions"].get("baseUrl").is_none(),
+            "baseUrl should be stripped"
+        );
+        // paths should be rewritten
+        assert_eq!(
+            content["compilerOptions"]["paths"]["@app/*"],
+            serde_json::json!(["./src/app/*"])
+        );
+        // strict flags present
+        assert_eq!(content["compilerOptions"]["strict"], true);
+        assert_eq!(content["compilerOptions"]["noEmit"], true);
     }
 }

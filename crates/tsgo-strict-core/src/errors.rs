@@ -19,6 +19,9 @@ pub enum Error {
     #[error("unable to locate tsgo binary (set TSGO_BINARY, install @typescript/native-preview, or add tsgo to PATH)")]
     TsgoNotFound,
 
+    #[error("tsgo exited with exit code {exit_code}: {stderr}")]
+    TsgoFailed { exit_code: i32, stderr: String },
+
     #[error("tsgo invocation failed: {0}")]
     TsgoSpawn(#[from] std::io::Error),
 
