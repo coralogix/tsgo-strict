@@ -46,8 +46,6 @@ pub fn write_temp_config(
     // directory.
     let absolute_files: Vec<Value> = files.iter().map(|f| Value::String(f.to_string())).collect();
 
-    let project_dir = project_path.parent().unwrap_or(Utf8Path::new("."));
-
     let root = if let Some(base_url_dir) = effective_base_url {
         // baseUrl detected in the extends chain — inline all compilerOptions
         // without `extends` to prevent TS5102 from tsgo.
@@ -60,7 +58,7 @@ pub fn write_temp_config(
         }
 
         // Normalize baseUrl: remove it and rewrite paths/typeRoots
-        normalize_base_url(&mut compiler_options, base_url_dir, project_dir);
+        normalize_base_url(&mut compiler_options, base_url_dir);
 
         let mut root = serde_json::Map::new();
         root.insert(
@@ -189,10 +187,10 @@ mod tests {
             content["compilerOptions"].get("baseUrl").is_none(),
             "baseUrl should be stripped"
         );
-        // paths should be rewritten
+        // paths should be rewritten to absolute
         assert_eq!(
             content["compilerOptions"]["paths"]["@app/*"],
-            serde_json::json!(["./src/app/*"])
+            serde_json::json!(["/fake/project/src/app/*"])
         );
         // strict flags present
         assert_eq!(content["compilerOptions"]["strict"], true);

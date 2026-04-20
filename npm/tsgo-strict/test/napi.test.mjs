@@ -23,6 +23,7 @@ const TSCONFIG_EXCLUDE_FIXTURE = path.join(__dirname, 'fixtures', 'tsconfig-excl
 const BASE_URL_FIXTURE = path.join(__dirname, 'fixtures', 'base-url');
 const BASE_URL_INHERITED_FIXTURE = path.join(__dirname, 'fixtures', 'base-url-inherited');
 const SOLUTION_STYLE_FIXTURE = path.join(__dirname, 'fixtures', 'solution-style');
+const BASE_URL_PATHS_FIXTURE = path.join(__dirname, 'fixtures', 'base-url-paths');
 const REPO_ROOT = path.resolve(__dirname, '..', '..', '..');
 
 // Skip the full suite when the platform addon hasn't been staged. This keeps
@@ -273,5 +274,32 @@ test('solution-style files:[] parent does not block child include', { skip: !add
   assert.ok(
     result.diagnostics.some((d) => d.file && d.file.endsWith(path.join('src', 'bad.ts'))),
     `expected diagnostic from src/bad.ts, got: ${result.diagnostics.map((d) => d.file).join(', ')}`,
+  );
+});
+
+test('baseUrl + paths with aliased imports resolves correctly from temp dir', { skip: !addonReady }, async () => {
+  // When baseUrl + paths are present, the transient tsconfig is written to a
+  // temp dir. Path entries must be absolute so tsgo resolves them correctly
+  // regardless of where the temp config lives.
+  const consumerDir = path.join(BASE_URL_PATHS_FIXTURE, 'consumer');
+  const result = await run({
+    project: path.join(consumerDir, 'tsconfig.lib.json'),
+    cwd: consumerDir,
+  });
+
+  // Should NOT have TS2307 (module not found) errors — paths must resolve
+  const ts2307 = result.diagnostics.filter((d) => d.code === 2307);
+  assert.equal(
+    ts2307.length,
+    0,
+    `unexpected TS2307 errors (path alias not resolved): ${ts2307.map((d) => d.message).join('; ')}`,
+  );
+
+  // Should report strict violations from use-greeter.ts (type mismatch)
+  assert.ok(result.errorCount > 0, `expected strict errors from use-greeter.ts, got errorCount=${result.errorCount}`);
+  assert.equal(result.exitCode, 1);
+  assert.ok(
+    result.diagnostics.some((d) => d.file && d.file.endsWith(path.join('src', 'use-greeter.ts'))),
+    `expected diagnostic from use-greeter.ts, got: ${result.diagnostics.map((d) => d.file).join(', ')}`,
   );
 });
