@@ -1,6 +1,6 @@
 {
   "name": "@tsgo-strict/win32-x64-msvc",
-  "version": "0.1.15",
+  "version": "0.1.16",
   "description": "Native tsgo-strict binary for Windows x64 (MSVC)",
   "license": "MIT",
   "repository": {
