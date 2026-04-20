@@ -2,7 +2,9 @@ use crate::binary::resolve_tsgo_binary;
 use crate::config::load_project_context;
 use crate::diagnostics::{Category, Diagnostic};
 use crate::errors::Error;
-use crate::files::{enumerate_project_files, find_strict_candidates, resolve_subset_inputs};
+use crate::files::{
+    build_glob_set, enumerate_project_files, find_strict_candidates, resolve_subset_inputs,
+};
 use crate::format::format_text_output;
 use crate::options::CliOptions;
 use crate::perf::{Timer, TimerEntry};
@@ -42,7 +44,22 @@ pub fn run_structured(options: &CliOptions) -> Result<StructuredOutcome, Error> 
     let project_files: Vec<Utf8PathBuf> = if subset_files.is_empty() {
         enumerate_project_files(&context)?.files
     } else {
-        subset_files.clone()
+        // Even for subset files, honour the tsconfig exclude so that
+        // explicitly excluded files (e.g. test-setup.ts) are not checked.
+        let exclude_patterns = context.resolved_exclude.clone().unwrap_or_default();
+        if exclude_patterns.is_empty() {
+            subset_files.clone()
+        } else {
+            let exclude_set = build_glob_set(&exclude_patterns, &context.config_dir)?;
+            match exclude_set {
+                Some(set) => subset_files
+                    .iter()
+                    .filter(|f| !set.is_match(f.as_std_path()))
+                    .cloned()
+                    .collect(),
+                None => subset_files.clone(),
+            }
+        }
     };
 
     let strict_candidates = find_strict_candidates(

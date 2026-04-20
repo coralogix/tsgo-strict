@@ -19,6 +19,7 @@ const PRAGMA_FIXTURE = path.join(__dirname, 'fixtures', 'pragmas');
 const EXCLUDE_PATTERN_FIXTURE = path.join(__dirname, 'fixtures', 'exclude-pattern');
 const EXTENDS_PLUGIN_FIXTURE = path.join(__dirname, 'fixtures', 'extends-plugin');
 const EXTENDS_EXCLUDE_FIXTURE = path.join(__dirname, 'fixtures', 'extends-exclude');
+const TSCONFIG_EXCLUDE_FIXTURE = path.join(__dirname, 'fixtures', 'tsconfig-exclude');
 const REPO_ROOT = path.resolve(__dirname, '..', '..', '..');
 
 // Skip the full suite when the platform addon hasn't been staged. This keeps
@@ -200,6 +201,22 @@ test('exclude inherited via extends chain filters files', { skip: !addonReady },
       !d.file.includes('generated'),
       `generated/ should be excluded via inherited exclude: ${d.file}`,
     );
+  }
+});
+
+test('tsconfig exclude skips file-specific and glob exclude entries', { skip: !addonReady }, async () => {
+  const result = await run({
+    project: path.join(TSCONFIG_EXCLUDE_FIXTURE, 'tsconfig.json'),
+    cwd: TSCONFIG_EXCLUDE_FIXTURE,
+  });
+
+  // app.ts and good.ts are strict-clean, test-setup.ts and app.spec.ts are
+  // excluded via tsconfig exclude — so we expect zero errors.
+  assert.equal(result.exitCode, 0, `expected exit 0, got diagnostics: ${JSON.stringify(result.diagnostics)}`);
+  assert.equal(result.errorCount, 0);
+  for (const d of result.diagnostics) {
+    assert.ok(!d.file?.includes('test-setup'), `test-setup.ts should be excluded: ${d.file}`);
+    assert.ok(!d.file?.includes('.spec.'), `spec file should be excluded: ${d.file}`);
   }
 });
 

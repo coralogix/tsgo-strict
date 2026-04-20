@@ -153,7 +153,7 @@ fn exclude_patterns(raw: &serde_json::Value) -> Vec<String> {
         .unwrap_or_default()
 }
 
-fn build_glob_set(
+pub(crate) fn build_glob_set(
     patterns: &[String],
     base: &Utf8PathBuf,
 ) -> Result<Option<globset::GlobSet>, Error> {
@@ -169,17 +169,21 @@ fn build_glob_set(
                 format!("{}/{}", base.as_str().trim_end_matches('/'), pattern)
             };
 
-        // TypeScript treats bare directory names (no glob chars) as `dir/**/*`.
-        // Append `/**` so that a pattern like `src` matches `src/foo/bar.ts`.
-        let expanded = if !anchored.contains('*') && !anchored.contains('?') {
-            format!("{}/**", anchored.trim_end_matches('/'))
+        if !anchored.contains('*') && !anchored.contains('?') {
+            // Literal pattern: add both a literal match (for file paths like
+            // "src/test-setup.ts") and a directory match (for directories like
+            // "src/legacy"). GlobSet matches if ANY glob in the set matches.
+            let literal_glob = Glob::new(&anchored)
+                .map_err(|e| Error::msg(format!("invalid glob pattern '{}': {}", pattern, e)))?;
+            builder.add(literal_glob);
+            let dir_glob = Glob::new(&format!("{}/**", anchored.trim_end_matches('/')))
+                .map_err(|e| Error::msg(format!("invalid glob pattern '{}': {}", pattern, e)))?;
+            builder.add(dir_glob);
         } else {
-            anchored
-        };
-
-        let glob = Glob::new(&expanded)
-            .map_err(|e| Error::msg(format!("invalid glob pattern '{}': {}", pattern, e)))?;
-        builder.add(glob);
+            let glob = Glob::new(&anchored)
+                .map_err(|e| Error::msg(format!("invalid glob pattern '{}': {}", pattern, e)))?;
+            builder.add(glob);
+        }
     }
     let set = builder
         .build()
@@ -191,5 +195,84 @@ fn is_ts_file(path: &Utf8PathBuf) -> bool {
     match path.extension() {
         Some(ext) => TS_EXTENSIONS.iter().any(|e| e.eq_ignore_ascii_case(ext)),
         None => false,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::Path;
+
+    #[test]
+    fn build_glob_set_matches_file_specific_exclude() {
+        let base = Utf8PathBuf::from("/project");
+        let patterns = vec!["src/test-setup.ts".to_string()];
+        let set = build_glob_set(&patterns, &base).unwrap().unwrap();
+        assert!(
+            set.is_match(Path::new("/project/src/test-setup.ts")),
+            "should match exact file path"
+        );
+        assert!(
+            !set.is_match(Path::new("/project/src/app.ts")),
+            "should not match other files"
+        );
+    }
+
+    #[test]
+    fn build_glob_set_matches_directory_exclude() {
+        let base = Utf8PathBuf::from("/project");
+        let patterns = vec!["src/legacy".to_string()];
+        let set = build_glob_set(&patterns, &base).unwrap().unwrap();
+        assert!(
+            set.is_match(Path::new("/project/src/legacy/foo.ts")),
+            "should match files inside directory"
+        );
+        assert!(
+            set.is_match(Path::new("/project/src/legacy/deep/bar.ts")),
+            "should match deeply nested files"
+        );
+        assert!(
+            !set.is_match(Path::new("/project/src/other/foo.ts")),
+            "should not match files outside directory"
+        );
+    }
+
+    #[test]
+    fn build_glob_set_wildcard_patterns_work() {
+        let base = Utf8PathBuf::from("/project");
+        let patterns = vec!["src/**/*.spec.ts".to_string()];
+        let set = build_glob_set(&patterns, &base).unwrap().unwrap();
+        assert!(set.is_match(Path::new("/project/src/app.spec.ts")));
+        assert!(set.is_match(Path::new("/project/src/deep/foo.spec.ts")));
+        assert!(!set.is_match(Path::new("/project/src/app.ts")));
+    }
+
+    #[test]
+    fn build_glob_set_mixed_patterns() {
+        let base = Utf8PathBuf::from("/project");
+        let patterns = vec![
+            "src/**/*.spec.ts".to_string(),
+            "src/test-setup.ts".to_string(),
+        ];
+        let set = build_glob_set(&patterns, &base).unwrap().unwrap();
+        assert!(
+            set.is_match(Path::new("/project/src/app.spec.ts")),
+            "should match glob pattern"
+        );
+        assert!(
+            set.is_match(Path::new("/project/src/test-setup.ts")),
+            "should match literal file"
+        );
+        assert!(
+            !set.is_match(Path::new("/project/src/app.ts")),
+            "should not match unrelated files"
+        );
+    }
+
+    #[test]
+    fn build_glob_set_empty_returns_none() {
+        let base = Utf8PathBuf::from("/project");
+        let patterns: Vec<String> = vec![];
+        assert!(build_glob_set(&patterns, &base).unwrap().is_none());
     }
 }
