@@ -324,12 +324,10 @@ mod tests {
 
     #[test]
     fn exclude_pattern_supports_regex_with_anchors() {
-        let matchers = compile_exclude_matchers(Some(&cfg(
-            None,
-            Some(vec![r"\.spec\.ts$", r"\.test\.ts$"]),
-        )))
-        .unwrap()
-        .unwrap();
+        let matchers =
+            compile_exclude_matchers(Some(&cfg(None, Some(vec![r"\.spec\.ts$", r"\.test\.ts$"]))))
+                .unwrap()
+                .unwrap();
 
         // Should match files ending in .spec.ts / .test.ts
         assert!(matchers[0].is_match("/proj/src/app.spec.ts"));
@@ -363,12 +361,9 @@ mod tests {
 
     #[test]
     fn exclude_pattern_regex_substring_match() {
-        let matchers = compile_exclude_matchers(Some(&cfg(
-            None,
-            Some(vec!["test-setup"]),
-        )))
-        .unwrap()
-        .unwrap();
+        let matchers = compile_exclude_matchers(Some(&cfg(None, Some(vec!["test-setup"]))))
+            .unwrap()
+            .unwrap();
 
         // Regex substring match (no anchors)
         assert!(matchers[0].is_match("/proj/src/test-setup.ts"));

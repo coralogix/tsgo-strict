@@ -161,10 +161,7 @@ mod tests {
 
     #[test]
     fn inherit_include_from_base_when_leaf_omits() {
-        let chain = vec![
-            json!({ "include": ["src/**/*"] }),
-            json!({}),
-        ];
+        let chain = vec![json!({ "include": ["src/**/*"] }), json!({})];
         assert_eq!(
             resolve_inherited_field(&chain, "include"),
             Some(vec!["src/**/*".to_string()])
@@ -185,10 +182,7 @@ mod tests {
 
     #[test]
     fn inherit_exclude_from_base_when_leaf_omits() {
-        let chain = vec![
-            json!({ "exclude": ["dist"] }),
-            json!({}),
-        ];
+        let chain = vec![json!({ "exclude": ["dist"] }), json!({})];
         assert_eq!(
             resolve_inherited_field(&chain, "exclude"),
             Some(vec!["dist".to_string()])
