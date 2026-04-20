@@ -15,12 +15,11 @@ pub struct TempConfig {
 }
 
 pub fn write_temp_config(
-    cwd: &Utf8PathBuf,
     project_path: &Utf8Path,
     raw_config: &serde_json::Value,
     files: &[Utf8PathBuf],
 ) -> Result<TempConfig, Error> {
-    let parent = cwd.as_std_path().join(".tsgo-strict-tmp");
+    let parent = std::env::temp_dir().join("tsgo-strict");
     std::fs::create_dir_all(&parent)
         .map_err(|e| Error::msg(format!("cannot create {}: {}", parent.display(), e)))?;
 
@@ -80,4 +79,48 @@ pub fn write_temp_config(
         path: Utf8PathBuf::try_from(config_path).unwrap(),
         _dir: dir,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn temp_config_lives_in_system_temp_dir() {
+        let project_path = Utf8Path::new("/fake/project/tsconfig.json");
+        let raw_config = serde_json::json!({
+            "compilerOptions": { "target": "ES2020" }
+        });
+        let files = vec![
+            Utf8PathBuf::from("/fake/project/src/a.ts"),
+            Utf8PathBuf::from("/fake/project/src/b.ts"),
+        ];
+
+        let temp = write_temp_config(project_path, &raw_config, &files).unwrap();
+
+        // Config is written under the system temp dir, not the project dir
+        assert!(
+            !temp.path.starts_with("/fake/project"),
+            "temp config should not be under the project dir: {}",
+            temp.path
+        );
+        assert!(
+            temp.path.as_str().contains("tsgo-strict/run-"),
+            "expected path to contain tsgo-strict/run-: {}",
+            temp.path
+        );
+
+        // Read back and verify structure
+        let content: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&temp.path).unwrap()).unwrap();
+
+        assert_eq!(content["extends"], "/fake/project/tsconfig.json");
+        assert_eq!(content["compilerOptions"]["strict"], true);
+        assert_eq!(content["compilerOptions"]["noEmit"], true);
+        assert_eq!(content["compilerOptions"]["target"], "ES2020");
+        assert_eq!(
+            content["files"],
+            serde_json::json!(["/fake/project/src/a.ts", "/fake/project/src/b.ts"])
+        );
+    }
 }
