@@ -1,5 +1,4 @@
 node_modules
-!npm/tsgo-strict/test/fixtures/**/node_modules
 coverage
 *.log
 
