@@ -28,6 +28,10 @@ pub struct RunInput<'a> {
     /// Merged compilerOptions from the full extends chain. Required when
     /// `effective_base_url` is `Some`.
     pub effective_compiler_options: Option<&'a serde_json::Map<String, serde_json::Value>>,
+    /// Directory of the last config in the extends chain to declare
+    /// `typeRoots`. Used to rewrite relative `typeRoots` entries to absolute
+    /// paths when writing the transient tsconfig.
+    pub effective_type_roots_dir: Option<&'a Utf8PathBuf>,
     /// Auto-discovered type directives to inject as `types` in the temp config.
     pub auto_type_directives: Option<&'a [String]>,
 }
@@ -39,6 +43,7 @@ pub fn run_tsgo(input: RunInput<'_>) -> Result<TsgoRunResult, Error> {
         input.files,
         input.effective_base_url,
         input.effective_compiler_options,
+        input.effective_type_roots_dir,
         input.auto_type_directives,
     )?;
 

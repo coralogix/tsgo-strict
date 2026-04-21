@@ -1,4 +1,6 @@
-use crate::config::base_url::normalize_base_url;
+use crate::config::base_url::{
+    normalize_base_url, rewrite_relative_paths, rewrite_relative_type_roots,
+};
 use crate::config::v6_compat::apply_v6_compat_shims;
 use crate::errors::Error;
 use camino::{Utf8Path, Utf8PathBuf};
@@ -35,6 +37,7 @@ pub fn write_temp_config(
     files: &[Utf8PathBuf],
     effective_base_url: Option<&Utf8PathBuf>,
     effective_compiler_options: Option<&serde_json::Map<String, Value>>,
+    effective_type_roots_dir: Option<&Utf8PathBuf>,
     auto_type_directives: Option<&[String]>,
 ) -> Result<TempConfig, Error> {
     let project_dir = project_path.parent().unwrap_or(Utf8Path::new("."));
@@ -72,8 +75,16 @@ pub fn write_temp_config(
             compiler_options.insert(flag.to_string(), Value::Bool(true));
         }
 
-        // Normalize baseUrl: remove it and rewrite paths/typeRoots
+        // Normalize baseUrl: remove it and rewrite paths to absolute.
         normalize_base_url(&mut compiler_options, base_url_dir);
+
+        // `typeRoots` is anchored at the config that defined it, not baseUrl.
+        // Fall back to the leaf's directory if we don't have a specific
+        // anchor — in practice this means the leaf defined the typeRoots.
+        let type_roots_anchor = effective_type_roots_dir
+            .map(|p| p.as_path())
+            .unwrap_or_else(|| project_path.parent().unwrap_or(Utf8Path::new(".")));
+        rewrite_relative_type_roots(&mut compiler_options, type_roots_anchor);
 
         // Inject auto-discovered type directives when types is not explicit.
         if let Some(types) = auto_type_directives {
@@ -107,6 +118,19 @@ pub fn write_temp_config(
         for flag in STRICT_FAMILY_FLAGS {
             compiler_options.insert(flag.to_string(), Value::Bool(true));
         }
+
+        // The temp config lives at <project>/.tsgo-strict-tmp/run-XXX/, two
+        // directories below the original tsconfig. Relative `paths` and
+        // `typeRoots` copied from the leaf's compilerOptions would resolve
+        // from that temp dir instead of the original — rewrite them to
+        // absolute paths anchored at the original tsconfig's directory so
+        // tsgo resolves them the same way it would from the real config.
+        let leaf_dir = project_path.parent().unwrap_or(Utf8Path::new("."));
+        rewrite_relative_paths(&mut compiler_options, leaf_dir);
+        let type_roots_anchor = effective_type_roots_dir
+            .map(|p| p.as_path())
+            .unwrap_or(leaf_dir);
+        rewrite_relative_type_roots(&mut compiler_options, type_roots_anchor);
 
         // Inject auto-discovered type directives when types is not explicit.
         if let Some(types) = auto_type_directives {
@@ -172,6 +196,7 @@ mod tests {
             None,
             None,
             None,
+            None,
         )
         .unwrap();
 
@@ -232,6 +257,7 @@ mod tests {
             &files,
             Some(&base_url_dir),
             Some(&effective_co),
+            None,
             None,
         )
         .unwrap();
@@ -294,6 +320,7 @@ mod tests {
             None,
             Some(&effective_co),
             None,
+            None,
         )
         .unwrap();
 
@@ -308,6 +335,278 @@ mod tests {
             true
         );
         assert_eq!(content["compilerOptions"]["alwaysStrict"], true);
+    }
+
+    #[test]
+    fn type_roots_anchored_at_defining_config_when_base_url_present() {
+        // Real-world shape from Nx workspaces: base config declares
+        // `baseUrl: "."` at the workspace root, a nested leaf tsconfig
+        // overrides `typeRoots` with paths like `../../node_modules/@types`
+        // relative to *the leaf's own directory*. tsc resolves typeRoots
+        // against the config that defined them (not baseUrl's dir), so the
+        // temp config must anchor the rewrite at the leaf's directory — not
+        // at base_url_dir — or the paths land in the wrong place.
+        let project_root = tempfile::tempdir().unwrap();
+        let project_dir = Utf8Path::from_path(project_root.path()).unwrap();
+        // Simulate workspace/libs/testing/ structure.
+        let leaf_dir = project_dir.join("libs/testing");
+        std::fs::create_dir_all(&leaf_dir).unwrap();
+        let tsconfig_path = leaf_dir.join("tsconfig.lib.json");
+        std::fs::write(&tsconfig_path, "{}").unwrap();
+
+        let raw_config = serde_json::json!({
+            "compilerOptions": {
+                "typeRoots": ["../../node_modules/@types", "../../node_modules"],
+                "types": ["vitest/globals"]
+            }
+        });
+
+        let mut effective_co = serde_json::Map::new();
+        effective_co.insert("baseUrl".to_string(), serde_json::json!("."));
+        effective_co.insert(
+            "typeRoots".to_string(),
+            serde_json::json!(["../../node_modules/@types", "../../node_modules"]),
+        );
+
+        // baseUrl resolves to the workspace root.
+        let base_url_dir = project_dir.to_owned();
+        let leaf_dir_owned = leaf_dir.clone();
+        let files = vec![leaf_dir.join("src/a.ts")];
+
+        let temp = write_temp_config(
+            tsconfig_path.as_ref(),
+            &raw_config,
+            &files,
+            Some(&base_url_dir),
+            Some(&effective_co),
+            Some(&leaf_dir_owned),
+            None,
+        )
+        .unwrap();
+
+        let content: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&temp.path).unwrap()).unwrap();
+
+        let type_roots = content["compilerOptions"]["typeRoots"].as_array().unwrap();
+        let first = type_roots[0].as_str().unwrap();
+
+        // Anchor must be the LEAF's dir, not base_url_dir. If anchored at
+        // base_url_dir (= project_dir), `../../node_modules/@types` would
+        // point *outside* the project tree entirely. Anchoring at leaf_dir
+        // (= project_dir/libs/testing) lands inside the project at
+        // `<project>/node_modules/@types`, which is what tsc would resolve.
+        let wrong_anchor_prefix = project_dir.join("../../node_modules");
+        assert!(
+            !first.starts_with(wrong_anchor_prefix.as_str()),
+            "typeRoots[0] appears anchored at base_url_dir — \
+             `../../` from the project root escapes the tree: {first}"
+        );
+        // Canonicalize both sides to collapse `..` segments and compare as
+        // filesystem paths — the string form includes the unresolved segments.
+        let expected_resolved = std::path::PathBuf::from(leaf_dir.as_str())
+            .join("../../node_modules/@types")
+            .canonicalize()
+            .ok();
+        let got_resolved = std::path::PathBuf::from(first).canonicalize().ok();
+        // Both paths refer to <project_dir>/node_modules/@types, which
+        // doesn't exist in this test, so canonicalize() returns None for
+        // both. Compare via lexical equality of the unresolved form instead.
+        if expected_resolved.is_some() && got_resolved.is_some() {
+            assert_eq!(got_resolved, expected_resolved);
+        } else {
+            // Fall back: first must *start* with leaf_dir (proving anchor).
+            assert!(
+                first.starts_with(leaf_dir.as_str()),
+                "typeRoots[0] should start with leaf dir {leaf_dir}, got: {first}"
+            );
+            assert!(
+                first.ends_with("/node_modules/@types"),
+                "typeRoots[0] should end with /node_modules/@types, got: {first}"
+            );
+        }
+    }
+
+    #[test]
+    fn relative_type_roots_rewritten_to_absolute_in_no_base_url_branch() {
+        // The temp config lives at <project>/.tsgo-strict-tmp/run-XXX/strict.json —
+        // two directories deeper than the project's own tsconfig. Relative
+        // typeRoots entries copied verbatim from the leaf's compilerOptions
+        // resolve against the TEMP dir rather than the project dir, so
+        // `../../node_modules` ends up pointing at `<project>/node_modules`
+        // (missing the workspace-root two levels up). Rewrite to absolute so
+        // tsgo resolves them the same way it would from the original tsconfig.
+        let project_root = tempfile::tempdir().unwrap();
+        let project_dir = Utf8Path::from_path(project_root.path()).unwrap();
+        let tsconfig_path = project_dir.join("tsconfig.json");
+        std::fs::write(&tsconfig_path, "{}").unwrap();
+
+        let raw_config = serde_json::json!({
+            "compilerOptions": {
+                "typeRoots": ["../../node_modules/@types", "../../node_modules"],
+                "types": ["vitest/globals"]
+            }
+        });
+        let files = vec![project_dir.join("src/a.ts")];
+
+        let temp = write_temp_config(
+            tsconfig_path.as_ref(),
+            &raw_config,
+            &files,
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+
+        let content: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&temp.path).unwrap()).unwrap();
+
+        let type_roots = content["compilerOptions"]["typeRoots"].as_array().unwrap();
+        let first = type_roots[0].as_str().unwrap();
+        let second = type_roots[1].as_str().unwrap();
+
+        assert!(
+            Utf8Path::new(first).is_absolute(),
+            "typeRoots[0] should be absolute, got: {first}"
+        );
+        assert!(
+            Utf8Path::new(second).is_absolute(),
+            "typeRoots[1] should be absolute, got: {second}"
+        );
+
+        // The absolute paths should resolve against the original tsconfig's
+        // directory, not the temp config's directory — so `../../node_modules`
+        // from the project dir lands two levels above the project.
+        let expected_suffix = "/node_modules/@types";
+        assert!(
+            first.ends_with(expected_suffix),
+            "typeRoots[0] should end with {expected_suffix}, got: {first}"
+        );
+    }
+
+    #[test]
+    fn dot_relative_type_roots_rewritten_to_absolute() {
+        // `./node_modules/@types` relative to the project dir should end up
+        // absolute at `<project_dir>/node_modules/@types`.
+        let project_root = tempfile::tempdir().unwrap();
+        let project_dir = Utf8Path::from_path(project_root.path()).unwrap();
+        let tsconfig_path = project_dir.join("tsconfig.json");
+        std::fs::write(&tsconfig_path, "{}").unwrap();
+
+        let raw_config = serde_json::json!({
+            "compilerOptions": {
+                "typeRoots": ["./node_modules/@types"]
+            }
+        });
+        let files = vec![project_dir.join("src/a.ts")];
+
+        let temp = write_temp_config(
+            tsconfig_path.as_ref(),
+            &raw_config,
+            &files,
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+
+        let content: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&temp.path).unwrap()).unwrap();
+
+        let type_roots = content["compilerOptions"]["typeRoots"].as_array().unwrap();
+        let entry = type_roots[0].as_str().unwrap();
+        assert!(
+            Utf8Path::new(entry).is_absolute(),
+            "typeRoots[0] should be absolute, got: {entry}"
+        );
+        assert!(
+            entry.contains("/node_modules/@types"),
+            "typeRoots[0] should contain /node_modules/@types, got: {entry}"
+        );
+    }
+
+    #[test]
+    fn absolute_type_roots_left_alone() {
+        let project_root = tempfile::tempdir().unwrap();
+        let project_dir = Utf8Path::from_path(project_root.path()).unwrap();
+        let tsconfig_path = project_dir.join("tsconfig.json");
+        std::fs::write(&tsconfig_path, "{}").unwrap();
+
+        let abs = if cfg!(windows) {
+            "C:/abs/types"
+        } else {
+            "/abs/types"
+        };
+
+        let raw_config = serde_json::json!({
+            "compilerOptions": {
+                "typeRoots": [abs]
+            }
+        });
+        let files = vec![project_dir.join("src/a.ts")];
+
+        let temp = write_temp_config(
+            tsconfig_path.as_ref(),
+            &raw_config,
+            &files,
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+
+        let content: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&temp.path).unwrap()).unwrap();
+
+        let type_roots = content["compilerOptions"]["typeRoots"].as_array().unwrap();
+        assert_eq!(type_roots[0].as_str().unwrap(), abs);
+    }
+
+    #[test]
+    fn relative_paths_rewritten_to_absolute_in_no_base_url_branch() {
+        // Same reasoning as typeRoots — without baseUrl, tsc resolves `paths`
+        // entries relative to the tsconfig that defines them. Copied verbatim
+        // into the temp config they would resolve two levels deeper.
+        let project_root = tempfile::tempdir().unwrap();
+        let project_dir = Utf8Path::from_path(project_root.path()).unwrap();
+        let tsconfig_path = project_dir.join("tsconfig.json");
+        std::fs::write(&tsconfig_path, "{}").unwrap();
+
+        let raw_config = serde_json::json!({
+            "compilerOptions": {
+                "paths": { "@lib/*": ["./src/lib/*"] }
+            }
+        });
+        let files = vec![project_dir.join("src/a.ts")];
+
+        let temp = write_temp_config(
+            tsconfig_path.as_ref(),
+            &raw_config,
+            &files,
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+
+        let content: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&temp.path).unwrap()).unwrap();
+
+        let first = content["compilerOptions"]["paths"]["@lib/*"][0]
+            .as_str()
+            .unwrap();
+        assert!(
+            Utf8Path::new(first).is_absolute(),
+            "paths entry should be absolute, got: {first}"
+        );
+        assert!(
+            first.ends_with("/src/lib/*"),
+            "paths entry should end with /src/lib/*, got: {first}"
+        );
     }
 
     #[test]
@@ -326,6 +625,7 @@ mod tests {
             tsconfig_path.as_ref(),
             &raw_config,
             &files,
+            None,
             None,
             None,
             None,
