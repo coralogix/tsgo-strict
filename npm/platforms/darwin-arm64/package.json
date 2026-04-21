@@ -1,6 +1,6 @@
 {
   "name": "@tsgo-strict/darwin-arm64",
-  "version": "0.1.16",
+  "version": "0.1.17",
   "description": "Native tsgo-strict binary for macOS arm64",
   "license": "MIT",
   "repository": {
