@@ -96,7 +96,31 @@ Additional opt-ins like `noUncheckedIndexedAccess`,
 in your own tsconfig.
 
 Everything else in your tsconfig (paths, lib, jsx, target, moduleResolution,
-etc.) is preserved.
+etc.) is preserved — with one narrow exception for TypeScript 6
+compatibility (see below).
+
+### TypeScript 6 compatibility
+
+`tsgo-strict` runs on top of `tsgo`, which is a TypeScript 6-generation
+compiler. To prevent v6 default changes from surfacing new errors on code
+that was clean under v5, the transient tsconfig applies a small set of
+compatibility shims:
+
+- **`ignoreDeprecations: "6.0"`** — silences deprecation warnings for
+  legacy options like `importsNotUsedAsValues`,
+  `suppressImplicitAnyIndexErrors`, `keyofStringsOnly`, and the legacy
+  `target`/`module`/`moduleResolution` values. Not applied if you've set
+  your own `ignoreDeprecations` value.
+- **`libReplacement: true`** and **`noUncheckedSideEffectImports: false`**
+  — preserve the v5 defaults so projects that relied on them keep working.
+  Not applied if you've set either explicitly.
+- **`esModuleInterop`, `allowSyntheticDefaultImports`, `alwaysStrict`** —
+  if any of these is set to `false` anywhere in your extends chain, it's
+  rewritten to `true` in the transient config. TypeScript 6 hard-removes
+  `false` for these options, so there's no valid way to honor the original
+  value.
+
+All other options in your tsconfig are passed through untouched.
 
 ### Opting out of a specific strict sub-flag
 
