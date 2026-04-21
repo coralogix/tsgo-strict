@@ -27,6 +27,8 @@ const BASE_URL_PATHS_FIXTURE = path.join(__dirname, 'fixtures', 'base-url-paths'
 const FILES_ARRAY_FIXTURE = path.join(__dirname, 'fixtures', 'files-array');
 const ORPHAN_FILE_FIXTURE = path.join(__dirname, 'fixtures', 'orphan-file');
 const TYPES_SUBPATH_FIXTURE = path.join(__dirname, 'fixtures', 'types-subpath');
+const TYPEROOT_AUTODISCOVERY_FIXTURE = path.join(__dirname, 'fixtures', 'typeroot-autodiscovery');
+const TYPEROOT_DEFAULT_FIXTURE = path.join(__dirname, 'fixtures', 'typeroot-default');
 const REPO_ROOT = path.resolve(__dirname, '..', '..', '..');
 
 // Skip the full suite when the platform addon hasn't been staged. This keeps
@@ -359,4 +361,62 @@ test('orphan files not reachable from entry points are excluded', { skip: !addon
   for (const d of result.diagnostics) {
     assert.ok(!d.file?.includes('orphan'), `orphan file should be excluded: ${d.file}`);
   }
+});
+
+test('custom typeRoots auto-discovered when types is absent (no TS2304/TS2688)', { skip: !addonReady }, async () => {
+  const result = await run({
+    project: path.join(TYPEROOT_AUTODISCOVERY_FIXTURE, 'tsconfig.json'),
+    cwd: TYPEROOT_AUTODISCOVERY_FIXTURE,
+  });
+
+  // Should NOT have TS2304 (cannot find name) or TS2688 (cannot find type definition)
+  const ts2304 = result.diagnostics.filter((d) => d.code === 2304);
+  const ts2688 = result.diagnostics.filter((d) => d.code === 2688);
+  assert.equal(
+    ts2304.length,
+    0,
+    `unexpected TS2304 errors (typeRoot globals not found): ${ts2304.map((d) => d.message).join('; ')}`,
+  );
+  assert.equal(
+    ts2688.length,
+    0,
+    `unexpected TS2688 errors (type definition not found): ${ts2688.map((d) => d.message).join('; ')}`,
+  );
+
+  // Should report strict errors (implicit-any on parameter x)
+  assert.ok(result.errorCount > 0, `expected strict errors from src/index.ts, got errorCount=${result.errorCount}`);
+  assert.equal(result.exitCode, 1);
+  assert.ok(
+    result.diagnostics.some((d) => d.file && d.file.endsWith(path.join('src', 'index.ts'))),
+    `expected diagnostic from src/index.ts, got: ${result.diagnostics.map((d) => d.file).join(', ')}`,
+  );
+});
+
+test('default typeRoots (node_modules/@types) auto-discovered when types is absent', { skip: !addonReady }, async () => {
+  const result = await run({
+    project: path.join(TYPEROOT_DEFAULT_FIXTURE, 'tsconfig.json'),
+    cwd: TYPEROOT_DEFAULT_FIXTURE,
+  });
+
+  // Should NOT have TS2304 or TS2688 from auto-discovered types
+  const ts2304 = result.diagnostics.filter((d) => d.code === 2304);
+  const ts2688 = result.diagnostics.filter((d) => d.code === 2688);
+  assert.equal(
+    ts2304.length,
+    0,
+    `unexpected TS2304 errors (default typeRoot globals not found): ${ts2304.map((d) => d.message).join('; ')}`,
+  );
+  assert.equal(
+    ts2688.length,
+    0,
+    `unexpected TS2688 errors (type definition not found): ${ts2688.map((d) => d.message).join('; ')}`,
+  );
+
+  // Should report strict errors (implicit-any on parameter x)
+  assert.ok(result.errorCount > 0, `expected strict errors from src/index.ts, got errorCount=${result.errorCount}`);
+  assert.equal(result.exitCode, 1);
+  assert.ok(
+    result.diagnostics.some((d) => d.file && d.file.endsWith(path.join('src', 'index.ts'))),
+    `expected diagnostic from src/index.ts, got: ${result.diagnostics.map((d) => d.file).join(', ')}`,
+  );
 });

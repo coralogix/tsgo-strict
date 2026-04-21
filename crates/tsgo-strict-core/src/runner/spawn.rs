@@ -28,6 +28,8 @@ pub struct RunInput<'a> {
     /// Merged compilerOptions from the full extends chain. Required when
     /// `effective_base_url` is `Some`.
     pub effective_compiler_options: Option<&'a serde_json::Map<String, serde_json::Value>>,
+    /// Auto-discovered type directives to inject as `types` in the temp config.
+    pub auto_type_directives: Option<&'a [String]>,
 }
 
 pub fn run_tsgo(input: RunInput<'_>) -> Result<TsgoRunResult, Error> {
@@ -37,6 +39,7 @@ pub fn run_tsgo(input: RunInput<'_>) -> Result<TsgoRunResult, Error> {
         input.files,
         input.effective_base_url,
         input.effective_compiler_options,
+        input.auto_type_directives,
     )?;
 
     let started = Instant::now();
