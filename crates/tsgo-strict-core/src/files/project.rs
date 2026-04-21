@@ -385,6 +385,7 @@ mod tests {
             resolved_files: None,
             effective_base_url: None,
             effective_compiler_options: None,
+            effective_type_roots_dir: None,
             auto_type_directives: None,
         }
     }
@@ -511,6 +512,7 @@ mod tests {
             resolved_files: None,
             effective_base_url: None,
             effective_compiler_options: None,
+            effective_type_roots_dir: None,
             auto_type_directives: None,
         };
 

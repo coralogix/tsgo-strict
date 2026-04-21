@@ -3,7 +3,10 @@ use camino::Utf8PathBuf;
 use serde_json::Value;
 use std::path::{Path, PathBuf};
 
-use super::base_url::{resolve_effective_base_url, resolve_effective_compiler_options};
+use super::base_url::{
+    resolve_effective_base_url, resolve_effective_compiler_options,
+    resolve_effective_type_roots_dir,
+};
 use super::extends::load_extends_chain;
 use super::plugin::StrictPluginConfig;
 use super::type_roots::resolve_auto_type_directives;
@@ -43,6 +46,12 @@ pub struct ProjectContext {
     /// Only populated when `effective_base_url` is `Some` (to avoid unnecessary
     /// work). Used by `write_temp_config` when inlining without `extends`.
     pub effective_compiler_options: Option<serde_json::Map<String, Value>>,
+    /// Absolute directory of the last config in the extends chain to declare
+    /// `compilerOptions.typeRoots`. tsc anchors relative `typeRoots` entries
+    /// against this directory (not `baseUrl`), and the transient tsconfig
+    /// writer needs the anchor because the temp file sits two directories
+    /// below the real tsconfig.
+    pub effective_type_roots_dir: Option<Utf8PathBuf>,
     /// Auto-discovered type directives (package names under typeRoots). When
     /// `types` is not explicitly set, we enumerate every subdirectory of every
     /// typeRoot and inject them as an explicit `types` array in the temp config
@@ -92,6 +101,7 @@ pub fn load_project_context(
     // needs it to decide whether the user set specific keys anywhere in the
     // extends chain.
     let effective_compiler_options = Some(resolve_effective_compiler_options(&chain));
+    let effective_type_roots_dir = resolve_effective_type_roots_dir(&chain);
 
     let auto_type_directives = resolve_auto_type_directives(&chain, config_dir.as_std_path());
 
@@ -106,6 +116,7 @@ pub fn load_project_context(
         resolved_files,
         effective_base_url,
         effective_compiler_options,
+        effective_type_roots_dir,
         auto_type_directives,
     })
 }

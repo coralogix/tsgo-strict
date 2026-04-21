@@ -144,6 +144,7 @@ pub fn run_structured(options: &CliOptions) -> Result<StructuredOutcome, Error> 
         binary: &binary,
         effective_base_url: context.effective_base_url.as_ref(),
         effective_compiler_options: context.effective_compiler_options.as_ref(),
+        effective_type_roots_dir: context.effective_type_roots_dir.as_ref(),
         auto_type_directives: context.auto_type_directives.as_deref(),
     })?;
     timer.end("strict-run");
