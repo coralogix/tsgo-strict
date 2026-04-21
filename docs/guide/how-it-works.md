@@ -27,10 +27,10 @@ does five things on every run.
 
 ## Where "strict" comes from
 
-The temporary tsconfig we emit flips exactly one compiler option on,
-regardless of what your base tsconfig says: `"strict": true`. This matches
-the original `typescript-strict-plugin`, which overrides the same single
-setting on the language service host.
+The temporary tsconfig we emit forces `"strict": true` regardless of what
+your base tsconfig says. This matches the original
+`typescript-strict-plugin`, which overrides the same single setting on the
+language service host.
 
 `strict` is the umbrella flag that TypeScript unfurls into the standard
 strict bundle: `strictNullChecks`, `noImplicitAny`, `strictFunctionTypes`,
@@ -39,8 +39,12 @@ strict bundle: `strictNullChecks`, `noImplicitAny`, `strictFunctionTypes`,
 knobs like `noUncheckedIndexedAccess` or `exactOptionalPropertyTypes` are
 **not** forced on — opt in via your own tsconfig if you want them.
 
-Everything else (module, target, jsx, paths, lib, …) is inherited from your
-base config.
+Alongside `strict`, the temp config pins `noEmit: true` and applies a
+small set of TypeScript 6 compatibility shims so v6 default changes don't
+surface as new errors on code that was clean under v5. See
+[Configuration › TypeScript 6 compatibility](/guide/configuration#typescript-6-compatibility)
+for the list. Everything else (module, target, jsx, paths, lib, …) is
+inherited from your base config.
 
 ## Binary resolution
 

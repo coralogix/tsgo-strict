@@ -88,11 +88,10 @@ pub fn load_project_context(
     };
 
     let effective_base_url = resolve_effective_base_url(&chain);
-    let effective_compiler_options = if effective_base_url.is_some() {
-        Some(resolve_effective_compiler_options(&chain))
-    } else {
-        None
-    };
+    // Always populate the merged compilerOptions view. The v6-compat shim
+    // needs it to decide whether the user set specific keys anywhere in the
+    // extends chain.
+    let effective_compiler_options = Some(resolve_effective_compiler_options(&chain));
 
     let auto_type_directives = resolve_auto_type_directives(&chain, config_dir.as_std_path());
 

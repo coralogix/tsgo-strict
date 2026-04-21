@@ -1,4 +1,5 @@
 use crate::config::base_url::normalize_base_url;
+use crate::config::v6_compat::apply_v6_compat_shims;
 use crate::errors::Error;
 use camino::{Utf8Path, Utf8PathBuf};
 use serde_json::Value;
@@ -82,6 +83,11 @@ pub fn write_temp_config(
             );
         }
 
+        // v5→v6 compatibility shims. Since the leaf here IS the merged view
+        // of the full chain (no `extends`), use it as `effective` too.
+        let effective_snapshot = compiler_options.clone();
+        apply_v6_compat_shims(&mut compiler_options, &effective_snapshot);
+
         let mut root = serde_json::Map::new();
         root.insert(
             "compilerOptions".to_string(),
@@ -109,6 +115,14 @@ pub fn write_temp_config(
                 Value::Array(types.iter().map(|t| Value::String(t.clone())).collect()),
             );
         }
+
+        // v5→v6 compatibility shims. Use the merged extends-chain view for
+        // deciding whether the user set a key anywhere; fall back to the
+        // leaf itself if no merged view was supplied.
+        let effective = effective_compiler_options
+            .cloned()
+            .unwrap_or_else(|| compiler_options.clone());
+        apply_v6_compat_shims(&mut compiler_options, &effective);
 
         let mut root = serde_json::Map::new();
         root.insert(
@@ -181,6 +195,12 @@ mod tests {
         assert_eq!(content["compilerOptions"]["strict"], true);
         assert_eq!(content["compilerOptions"]["noEmit"], true);
         assert_eq!(content["compilerOptions"]["target"], "ES2020");
+        assert_eq!(content["compilerOptions"]["ignoreDeprecations"], "6.0");
+        assert_eq!(
+            content["compilerOptions"]["noUncheckedSideEffectImports"],
+            false
+        );
+        assert_eq!(content["compilerOptions"]["libReplacement"], true);
         assert_eq!(content["files"].as_array().unwrap().len(), 2);
     }
 
@@ -239,6 +259,55 @@ mod tests {
         // strict flags present
         assert_eq!(content["compilerOptions"]["strict"], true);
         assert_eq!(content["compilerOptions"]["noEmit"], true);
+        // v6 compat shims applied
+        assert_eq!(content["compilerOptions"]["ignoreDeprecations"], "6.0");
+        assert_eq!(
+            content["compilerOptions"]["noUncheckedSideEffectImports"],
+            false
+        );
+        assert_eq!(content["compilerOptions"]["libReplacement"], true);
+    }
+
+    #[test]
+    fn temp_config_rewrites_esmoduleinterop_false_from_effective_options() {
+        let project_root = tempfile::tempdir().unwrap();
+        let project_dir = Utf8Path::from_path(project_root.path()).unwrap();
+        let tsconfig_path = project_dir.join("tsconfig.json");
+        std::fs::write(&tsconfig_path, "{}").unwrap();
+
+        let raw_config = serde_json::json!({ "compilerOptions": {} });
+
+        let mut effective_co = serde_json::Map::new();
+        effective_co.insert("esModuleInterop".to_string(), serde_json::json!(false));
+        effective_co.insert(
+            "allowSyntheticDefaultImports".to_string(),
+            serde_json::json!(false),
+        );
+        effective_co.insert("alwaysStrict".to_string(), serde_json::json!(false));
+
+        let files = vec![project_dir.join("src/a.ts")];
+
+        let temp = write_temp_config(
+            tsconfig_path.as_ref(),
+            &raw_config,
+            &files,
+            None,
+            Some(&effective_co),
+            None,
+        )
+        .unwrap();
+
+        let content: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&temp.path).unwrap()).unwrap();
+
+        // Hard-removed-false keys rewritten to true on the leaf so they win
+        // over the inherited `false` via `extends`.
+        assert_eq!(content["compilerOptions"]["esModuleInterop"], true);
+        assert_eq!(
+            content["compilerOptions"]["allowSyntheticDefaultImports"],
+            true
+        );
+        assert_eq!(content["compilerOptions"]["alwaysStrict"], true);
     }
 
     #[test]

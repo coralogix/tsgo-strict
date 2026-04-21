@@ -29,6 +29,8 @@ const ORPHAN_FILE_FIXTURE = path.join(__dirname, 'fixtures', 'orphan-file');
 const TYPES_SUBPATH_FIXTURE = path.join(__dirname, 'fixtures', 'types-subpath');
 const TYPEROOT_AUTODISCOVERY_FIXTURE = path.join(__dirname, 'fixtures', 'typeroot-autodiscovery');
 const TYPEROOT_DEFAULT_FIXTURE = path.join(__dirname, 'fixtures', 'typeroot-default');
+const V6_DEPRECATED_OPTIONS_FIXTURE = path.join(__dirname, 'fixtures', 'v6-deprecated-options');
+const V6_ESMODULEINTEROP_FALSE_FIXTURE = path.join(__dirname, 'fixtures', 'v6-esmoduleinterop-false');
 const REPO_ROOT = path.resolve(__dirname, '..', '..', '..');
 
 // Skip the full suite when the platform addon hasn't been staged. This keeps
@@ -419,4 +421,70 @@ test('default typeRoots (node_modules/@types) auto-discovered when types is abse
     result.diagnostics.some((d) => d.file && d.file.endsWith(path.join('src', 'index.ts'))),
     `expected diagnostic from src/index.ts, got: ${result.diagnostics.map((d) => d.file).join(', ')}`,
   );
+});
+
+test('v6 deprecated options do not produce config-level warnings', { skip: !addonReady }, async () => {
+  const result = await run({
+    project: path.join(V6_DEPRECATED_OPTIONS_FIXTURE, 'tsconfig.json'),
+    cwd: V6_DEPRECATED_OPTIONS_FIXTURE,
+  });
+
+  // User's strict-mode error should still fire.
+  assert.ok(result.errorCount > 0, 'expected the strict implicit-any error to surface');
+
+  // `ignoreDeprecations: "6.0"` should silence the deprecation family (TS5101/TS5102).
+  const deprecationNoise = result.diagnostics.filter(
+    (d) => d.code === 5101 || d.code === 5102,
+  );
+  assert.equal(
+    deprecationNoise.length,
+    0,
+    `expected no deprecation warnings, got: ${deprecationNoise.map((d) => `TS${d.code}: ${d.message}`).join('; ')}`,
+  );
+
+  // Every diagnostic should belong to src/bad.ts, not the config.
+  for (const d of result.diagnostics) {
+    assert.ok(d.file, 'diagnostic should have a file');
+    assert.ok(
+      d.file.endsWith(path.join('src', 'bad.ts')),
+      `unexpected diagnostic file: ${d.file}`,
+    );
+  }
+});
+
+test('esModuleInterop: false does not surface synthetic default import errors', { skip: !addonReady }, async () => {
+  const result = await run({
+    project: path.join(V6_ESMODULEINTEROP_FALSE_FIXTURE, 'tsconfig.json'),
+    cwd: V6_ESMODULEINTEROP_FALSE_FIXTURE,
+  });
+
+  // User's strict-mode error should still fire (implicit-any on `path`).
+  assert.ok(result.errorCount > 0, 'expected the strict implicit-any error to surface');
+
+  // TS1192 ("module has no default export") and TS1259 ("esModuleInterop flag required")
+  // would fire if v5's `esModuleInterop: false` were honored. The shim must rewrite
+  // it to true so these never appear.
+  const syntheticDefaultErrors = result.diagnostics.filter(
+    (d) => d.code === 1192 || d.code === 1259,
+  );
+  assert.equal(
+    syntheticDefaultErrors.length,
+    0,
+    `expected no synthetic-default-import errors, got: ${syntheticDefaultErrors.map((d) => `TS${d.code}: ${d.message}`).join('; ')}`,
+  );
+});
+
+test('v6 compat shim is non-destructive for clean fixtures', { skip: !addonReady }, async () => {
+  // The shim must be purely additive on fixtures that don't hit any of its
+  // cases. Re-run `basic` and confirm the diagnostics still all come from
+  // in-scope paths (same contract as the first test in this file).
+  const result = await run({ project: path.join(FIXTURE, 'tsconfig.json'), cwd: FIXTURE });
+
+  assert.ok(result.errorCount > 0, 'expected strict errors from src/in-scope');
+  assert.equal(result.exitCode, 1);
+  for (const d of result.diagnostics) {
+    assert.ok(d.file, 'strict diagnostics should have a file');
+    assert.ok(d.file.includes('in-scope'), `unexpected file ${d.file}`);
+    assert.ok(!d.file.includes('out-of-scope'), `out-of-scope file leaked: ${d.file}`);
+  }
 });
