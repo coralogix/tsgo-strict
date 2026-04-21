@@ -1,0 +1,2 @@
+# Allow fixture node_modules to be committed (mock type packages, etc.)
+!node_modules/

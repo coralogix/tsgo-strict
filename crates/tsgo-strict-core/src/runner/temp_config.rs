@@ -34,6 +34,7 @@ pub fn write_temp_config(
     files: &[Utf8PathBuf],
     effective_base_url: Option<&Utf8PathBuf>,
     effective_compiler_options: Option<&serde_json::Map<String, Value>>,
+    auto_type_directives: Option<&[String]>,
 ) -> Result<TempConfig, Error> {
     let project_dir = project_path.parent().unwrap_or(Utf8Path::new("."));
     let parent = project_dir.as_std_path().join(".tsgo-strict-tmp");
@@ -73,6 +74,14 @@ pub fn write_temp_config(
         // Normalize baseUrl: remove it and rewrite paths/typeRoots
         normalize_base_url(&mut compiler_options, base_url_dir);
 
+        // Inject auto-discovered type directives when types is not explicit.
+        if let Some(types) = auto_type_directives {
+            compiler_options.insert(
+                "types".to_string(),
+                Value::Array(types.iter().map(|t| Value::String(t.clone())).collect()),
+            );
+        }
+
         let mut root = serde_json::Map::new();
         root.insert(
             "compilerOptions".to_string(),
@@ -91,6 +100,14 @@ pub fn write_temp_config(
         compiler_options.insert("noEmit".to_string(), Value::Bool(true));
         for flag in STRICT_FAMILY_FLAGS {
             compiler_options.insert(flag.to_string(), Value::Bool(true));
+        }
+
+        // Inject auto-discovered type directives when types is not explicit.
+        if let Some(types) = auto_type_directives {
+            compiler_options.insert(
+                "types".to_string(),
+                Value::Array(types.iter().map(|t| Value::String(t.clone())).collect()),
+            );
         }
 
         let mut root = serde_json::Map::new();
@@ -134,8 +151,15 @@ mod tests {
         });
         let files = vec![project_dir.join("src/a.ts"), project_dir.join("src/b.ts")];
 
-        let temp =
-            write_temp_config(tsconfig_path.as_ref(), &raw_config, &files, None, None).unwrap();
+        let temp = write_temp_config(
+            tsconfig_path.as_ref(),
+            &raw_config,
+            &files,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
 
         // Config should be under <project_dir>/.tsgo-strict-tmp/run-
         assert!(
@@ -188,6 +212,7 @@ mod tests {
             &files,
             Some(&base_url_dir),
             Some(&effective_co),
+            None,
         )
         .unwrap();
 
@@ -228,8 +253,15 @@ mod tests {
         });
         let files = vec![project_dir.join("src/a.ts")];
 
-        let temp =
-            write_temp_config(tsconfig_path.as_ref(), &raw_config, &files, None, None).unwrap();
+        let temp = write_temp_config(
+            tsconfig_path.as_ref(),
+            &raw_config,
+            &files,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
 
         let parent = project_dir.join(".tsgo-strict-tmp");
         assert!(

@@ -385,6 +385,7 @@ mod tests {
             resolved_files: None,
             effective_base_url: None,
             effective_compiler_options: None,
+            auto_type_directives: None,
         }
     }
 
@@ -510,6 +511,7 @@ mod tests {
             resolved_files: None,
             effective_base_url: None,
             effective_compiler_options: None,
+            auto_type_directives: None,
         };
 
         let scope = enumerate_project_files(&ctx).expect("enumerate");

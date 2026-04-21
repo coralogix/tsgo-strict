@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 use super::base_url::{resolve_effective_base_url, resolve_effective_compiler_options};
 use super::extends::load_extends_chain;
 use super::plugin::StrictPluginConfig;
+use super::type_roots::resolve_auto_type_directives;
 
 /// A resolved top-level array field (`include`, `exclude`, or `files`) paired
 /// with the directory of the tsconfig that defined it. TypeScript resolves
@@ -42,6 +43,11 @@ pub struct ProjectContext {
     /// Only populated when `effective_base_url` is `Some` (to avoid unnecessary
     /// work). Used by `write_temp_config` when inlining without `extends`.
     pub effective_compiler_options: Option<serde_json::Map<String, Value>>,
+    /// Auto-discovered type directives (package names under typeRoots). When
+    /// `types` is not explicitly set, we enumerate every subdirectory of every
+    /// typeRoot and inject them as an explicit `types` array in the temp config
+    /// so that tsgo's auto-discovery works correctly from the temp directory.
+    pub auto_type_directives: Option<Vec<String>>,
 }
 
 pub fn load_project_context(
@@ -88,6 +94,8 @@ pub fn load_project_context(
         None
     };
 
+    let auto_type_directives = resolve_auto_type_directives(&chain, config_dir.as_std_path());
+
     Ok(ProjectContext {
         cwd: cwd.clone(),
         project_path,
@@ -99,6 +107,7 @@ pub fn load_project_context(
         resolved_files,
         effective_base_url,
         effective_compiler_options,
+        auto_type_directives,
     })
 }
 
