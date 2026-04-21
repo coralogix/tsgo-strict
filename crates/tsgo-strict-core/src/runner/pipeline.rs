@@ -9,7 +9,7 @@ use crate::files::{
 use crate::format::format_text_output;
 use crate::options::CliOptions;
 use crate::perf::{Timer, TimerEntry};
-use crate::runner::spawn::{run_tsgo, RunInput, TsgoRunResult};
+use crate::runner::spawn::{query_reachable_files, run_tsgo, RunInput, TsgoRunResult};
 use camino::Utf8PathBuf;
 use std::collections::HashSet;
 
@@ -112,6 +112,29 @@ pub fn run_structured(options: &CliOptions) -> Result<StructuredOutcome, Error> 
 
     let binary = resolve_tsgo_binary(&options.cwd)?;
 
+    // Filter to only files reachable from the tsconfig's entry points. This
+    // excludes orphan files that live under plugin `paths` but are never
+    // imported. Skip when the user passed a subset — they explicitly chose.
+    let effective_targets = if subset_files.is_empty() {
+        timer.start("reachable-query");
+        let reachable = query_reachable_files(&binary, &context.project_path, &options.cwd)?;
+        timer.end("reachable-query");
+        effective_targets
+            .into_iter()
+            .filter(|f| reachable.contains(&normalize(f)))
+            .collect()
+    } else {
+        effective_targets
+    };
+
+    if effective_targets.is_empty() {
+        return Ok(StructuredOutcome {
+            diagnostics: Vec::new(),
+            timings: timer.entries().to_vec(),
+            exit_code: 0,
+        });
+    }
+
     timer.start("strict-run");
     let result = run_tsgo(RunInput {
         cwd: &options.cwd,
@@ -209,6 +232,15 @@ pub fn list_files(options: &CliOptions) -> Result<Vec<Utf8PathBuf>, Error> {
 
     let mut effective = effective_targets(&strict_candidates, &subset_files);
     timer.end("file-resolution");
+
+    // Filter to only files reachable from the tsconfig's entry points.
+    if subset_files.is_empty() && !effective.is_empty() {
+        let binary = resolve_tsgo_binary(&options.cwd)?;
+        timer.start("reachable-query");
+        let reachable = query_reachable_files(&binary, &context.project_path, &options.cwd)?;
+        timer.end("reachable-query");
+        effective.retain(|f| reachable.contains(&normalize(f)));
+    }
 
     effective.sort();
     Ok(effective)

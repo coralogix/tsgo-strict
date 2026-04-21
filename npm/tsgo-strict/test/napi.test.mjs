@@ -25,6 +25,8 @@ const BASE_URL_INHERITED_FIXTURE = path.join(__dirname, 'fixtures', 'base-url-in
 const SOLUTION_STYLE_FIXTURE = path.join(__dirname, 'fixtures', 'solution-style');
 const BASE_URL_PATHS_FIXTURE = path.join(__dirname, 'fixtures', 'base-url-paths');
 const FILES_ARRAY_FIXTURE = path.join(__dirname, 'fixtures', 'files-array');
+const ORPHAN_FILE_FIXTURE = path.join(__dirname, 'fixtures', 'orphan-file');
+const TYPES_SUBPATH_FIXTURE = path.join(__dirname, 'fixtures', 'types-subpath');
 const REPO_ROOT = path.resolve(__dirname, '..', '..', '..');
 
 // Skip the full suite when the platform addon hasn't been staged. This keeps
@@ -305,6 +307,29 @@ test('baseUrl + paths with aliased imports resolves correctly from temp dir', { 
   );
 });
 
+test('types subpath (e.g. "mock-lib/globals") resolves without TS2688', { skip: !addonReady }, async () => {
+  const result = await run({
+    project: path.join(TYPES_SUBPATH_FIXTURE, 'tsconfig.json'),
+    cwd: TYPES_SUBPATH_FIXTURE,
+  });
+
+  // TS2688 = "Cannot find type definition file for '...'"
+  const ts2688 = result.diagnostics.filter((d) => d.code === 2688);
+  assert.equal(
+    ts2688.length,
+    0,
+    `unexpected TS2688 errors (types subpath not resolved): ${ts2688.map((d) => d.message).join('; ')}`,
+  );
+
+  // Should report strict errors from src/index.ts (implicit any)
+  assert.ok(result.errorCount > 0, `expected strict errors from src/index.ts, got errorCount=${result.errorCount}`);
+  assert.equal(result.exitCode, 1);
+  assert.ok(
+    result.diagnostics.some((d) => d.file && d.file.endsWith(path.join('src', 'index.ts'))),
+    `expected diagnostic from src/index.ts, got: ${result.diagnostics.map((d) => d.file).join(', ')}`,
+  );
+});
+
 test('files-array tsconfig with plugin paths reports errors from transitive imports', { skip: !addonReady }, async () => {
   const result = await run({
     project: path.join(FILES_ARRAY_FIXTURE, 'tsconfig.json'),
@@ -319,4 +344,19 @@ test('files-array tsconfig with plugin paths reports errors from transitive impo
     result.diagnostics.some((d) => d.file && d.file.includes(path.join('lib', 'broken.ts'))),
     `expected diagnostic from broken.ts, got files: ${result.diagnostics.map((d) => d.file).join(', ')}`,
   );
+});
+
+test('orphan files not reachable from entry points are excluded', { skip: !addonReady }, async () => {
+  const result = await run({
+    project: path.join(ORPHAN_FILE_FIXTURE, 'tsconfig.json'),
+    cwd: ORPHAN_FILE_FIXTURE,
+  });
+
+  // orphan.ts has an implicit-any but is NOT imported by main.ts, so it
+  // should be excluded from strict checking via the reachable-set filter.
+  assert.equal(result.exitCode, 0, `expected exit 0 (orphan excluded), got diagnostics: ${JSON.stringify(result.diagnostics)}`);
+  assert.equal(result.errorCount, 0);
+  for (const d of result.diagnostics) {
+    assert.ok(!d.file?.includes('orphan'), `orphan file should be excluded: ${d.file}`);
+  }
 });

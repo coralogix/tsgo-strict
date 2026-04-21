@@ -13,7 +13,19 @@ pub const STRICT_FAMILY_FLAGS: &[&str] = &["strict"];
 
 pub struct TempConfig {
     pub path: Utf8PathBuf,
-    pub _dir: TempDir,
+    /// The `run-XXX` temp directory. Wrapped in `Option` so `Drop` can take it.
+    _dir: Option<TempDir>,
+    /// The `.tsgo-strict-tmp` parent — removed if empty after `_dir` is dropped.
+    parent_dir: std::path::PathBuf,
+}
+
+impl Drop for TempConfig {
+    fn drop(&mut self) {
+        // Drop the run-XXX directory first.
+        drop(self._dir.take());
+        // Remove the .tsgo-strict-tmp parent if it's now empty (no concurrent runs).
+        let _ = std::fs::remove_dir(&self.parent_dir);
+    }
 }
 
 pub fn write_temp_config(
@@ -23,7 +35,8 @@ pub fn write_temp_config(
     effective_base_url: Option<&Utf8PathBuf>,
     effective_compiler_options: Option<&serde_json::Map<String, Value>>,
 ) -> Result<TempConfig, Error> {
-    let parent = std::env::temp_dir().join("tsgo-strict");
+    let project_dir = project_path.parent().unwrap_or(Utf8Path::new("."));
+    let parent = project_dir.as_std_path().join(".tsgo-strict-tmp");
     std::fs::create_dir_all(&parent)
         .map_err(|e| Error::msg(format!("cannot create {}: {}", parent.display(), e)))?;
 
@@ -100,7 +113,8 @@ pub fn write_temp_config(
 
     Ok(TempConfig {
         path: Utf8PathBuf::try_from(config_path).unwrap(),
-        _dir: dir,
+        _dir: Some(dir),
+        parent_dir: parent,
     })
 }
 
@@ -109,27 +123,29 @@ mod tests {
     use super::*;
 
     #[test]
-    fn temp_config_lives_in_system_temp_dir() {
-        let project_path = Utf8Path::new("/fake/project/tsconfig.json");
+    fn temp_config_lives_under_project_dir() {
+        let project_root = tempfile::tempdir().unwrap();
+        let project_dir = Utf8Path::from_path(project_root.path()).unwrap();
+        let tsconfig_path = project_dir.join("tsconfig.json");
+        std::fs::write(&tsconfig_path, "{}").unwrap();
+
         let raw_config = serde_json::json!({
             "compilerOptions": { "target": "ES2020" }
         });
-        let files = vec![
-            Utf8PathBuf::from("/fake/project/src/a.ts"),
-            Utf8PathBuf::from("/fake/project/src/b.ts"),
-        ];
+        let files = vec![project_dir.join("src/a.ts"), project_dir.join("src/b.ts")];
 
-        let temp = write_temp_config(project_path, &raw_config, &files, None, None).unwrap();
+        let temp =
+            write_temp_config(tsconfig_path.as_ref(), &raw_config, &files, None, None).unwrap();
 
-        // Config is written under the system temp dir, not the project dir
+        // Config should be under <project_dir>/.tsgo-strict-tmp/run-
         assert!(
-            !temp.path.starts_with("/fake/project"),
-            "temp config should not be under the project dir: {}",
+            temp.path.starts_with(project_dir),
+            "temp config should be under the project dir: {}",
             temp.path
         );
         assert!(
-            temp.path.as_str().contains("tsgo-strict/run-"),
-            "expected path to contain tsgo-strict/run-: {}",
+            temp.path.as_str().contains(".tsgo-strict-tmp/run-"),
+            "expected path to contain .tsgo-strict-tmp/run-: {}",
             temp.path
         );
 
@@ -137,19 +153,20 @@ mod tests {
         let content: serde_json::Value =
             serde_json::from_str(&std::fs::read_to_string(&temp.path).unwrap()).unwrap();
 
-        assert_eq!(content["extends"], "/fake/project/tsconfig.json");
+        assert_eq!(content["extends"], tsconfig_path.as_str());
         assert_eq!(content["compilerOptions"]["strict"], true);
         assert_eq!(content["compilerOptions"]["noEmit"], true);
         assert_eq!(content["compilerOptions"]["target"], "ES2020");
-        assert_eq!(
-            content["files"],
-            serde_json::json!(["/fake/project/src/a.ts", "/fake/project/src/b.ts"])
-        );
+        assert_eq!(content["files"].as_array().unwrap().len(), 2);
     }
 
     #[test]
     fn temp_config_inlines_when_base_url_present() {
-        let project_path = Utf8Path::new("/fake/project/tsconfig.json");
+        let project_root = tempfile::tempdir().unwrap();
+        let project_dir = Utf8Path::from_path(project_root.path()).unwrap();
+        let tsconfig_path = project_dir.join("tsconfig.json");
+        std::fs::write(&tsconfig_path, "{}").unwrap();
+
         let raw_config = serde_json::json!({
             "compilerOptions": { "target": "ES2020", "baseUrl": ".", "paths": { "@app/*": ["src/app/*"] } }
         });
@@ -162,11 +179,11 @@ mod tests {
             serde_json::json!({ "@app/*": ["src/app/*"] }),
         );
 
-        let base_url_dir = Utf8PathBuf::from("/fake/project");
-        let files = vec![Utf8PathBuf::from("/fake/project/src/a.ts")];
+        let base_url_dir = project_dir.to_owned();
+        let files = vec![project_dir.join("src/a.ts")];
 
         let temp = write_temp_config(
-            project_path,
+            tsconfig_path.as_ref(),
             &raw_config,
             &files,
             Some(&base_url_dir),
@@ -188,12 +205,44 @@ mod tests {
             "baseUrl should be stripped"
         );
         // paths should be rewritten to absolute
-        assert_eq!(
-            content["compilerOptions"]["paths"]["@app/*"],
-            serde_json::json!(["/fake/project/src/app/*"])
+        let paths_app = &content["compilerOptions"]["paths"]["@app/*"];
+        let first_path = paths_app[0].as_str().unwrap();
+        assert!(
+            first_path.ends_with("/src/app/*"),
+            "paths should end with /src/app/*: {first_path}"
         );
         // strict flags present
         assert_eq!(content["compilerOptions"]["strict"], true);
         assert_eq!(content["compilerOptions"]["noEmit"], true);
+    }
+
+    #[test]
+    fn drop_cleans_up_parent_dir() {
+        let project_root = tempfile::tempdir().unwrap();
+        let project_dir = Utf8Path::from_path(project_root.path()).unwrap();
+        let tsconfig_path = project_dir.join("tsconfig.json");
+        std::fs::write(&tsconfig_path, "{}").unwrap();
+
+        let raw_config = serde_json::json!({
+            "compilerOptions": { "target": "ES2020" }
+        });
+        let files = vec![project_dir.join("src/a.ts")];
+
+        let temp =
+            write_temp_config(tsconfig_path.as_ref(), &raw_config, &files, None, None).unwrap();
+
+        let parent = project_dir.join(".tsgo-strict-tmp");
+        assert!(
+            parent.exists(),
+            ".tsgo-strict-tmp should exist while temp config is alive"
+        );
+
+        // Drop the temp config — should clean up both run-XXX and .tsgo-strict-tmp
+        drop(temp);
+
+        assert!(
+            !parent.exists(),
+            ".tsgo-strict-tmp should be removed after drop"
+        );
     }
 }

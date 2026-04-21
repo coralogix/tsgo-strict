@@ -3,6 +3,7 @@ use crate::errors::Error;
 use crate::runner::parse::parse_diagnostics;
 use crate::runner::temp_config::{write_temp_config, TempConfig};
 use camino::Utf8PathBuf;
+use std::collections::HashSet;
 use std::process::Command;
 use std::time::Instant;
 
@@ -68,4 +69,93 @@ pub fn run_tsgo(input: RunInput<'_>) -> Result<TsgoRunResult, Error> {
         exit_code,
         duration_ms,
     })
+}
+
+/// Run `tsgo --listFilesOnly` against the original tsconfig and return the
+/// compiler's reachable file set as normalized absolute paths.
+pub fn query_reachable_files(
+    binary: &Utf8PathBuf,
+    project_path: &Utf8PathBuf,
+    cwd: &Utf8PathBuf,
+) -> Result<HashSet<String>, Error> {
+    let output = Command::new(binary.as_std_path())
+        .args([
+            "--listFilesOnly",
+            "--pretty",
+            "false",
+            "-p",
+            project_path.as_str(),
+        ])
+        .current_dir(cwd.as_std_path())
+        .env("NO_COLOR", "1")
+        .env("FORCE_COLOR", "0")
+        .output()
+        .map_err(|e| {
+            Error::msg(format!(
+                "failed to spawn tsgo --listFilesOnly ({}): {}",
+                binary, e
+            ))
+        })?;
+
+    let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
+    let exit_code = output.status.code().unwrap_or(1);
+
+    if exit_code != 0 && stdout.trim().is_empty() {
+        let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
+        return Err(Error::TsgoFailed {
+            exit_code,
+            stderr: stderr.trim().to_string(),
+        });
+    }
+
+    Ok(parse_list_files_output(&stdout))
+}
+
+/// Parse the line-per-file output of `tsgo --listFilesOnly` into a set of
+/// normalized paths (forward slashes, lowercase). Filters out node_modules.
+pub fn parse_list_files_output(stdout: &str) -> HashSet<String> {
+    stdout
+        .lines()
+        .map(|l| l.trim())
+        .filter(|l| !l.is_empty())
+        .filter(|l| !l.contains("/node_modules/") && !l.contains("\\node_modules\\"))
+        .map(|l| l.replace('\\', "/").to_ascii_lowercase())
+        .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_list_files_output_empty_input() {
+        assert!(parse_list_files_output("").is_empty());
+        assert!(parse_list_files_output("   \n  \n").is_empty());
+    }
+
+    #[test]
+    fn parse_list_files_output_filters_node_modules() {
+        let input = "/proj/src/main.ts\n/proj/node_modules/lib/index.d.ts\n/proj/src/util.ts\n";
+        let set = parse_list_files_output(input);
+        assert_eq!(set.len(), 2);
+        assert!(set.contains("/proj/src/main.ts"));
+        assert!(set.contains("/proj/src/util.ts"));
+    }
+
+    #[test]
+    fn parse_list_files_output_normalizes_backslashes_and_case() {
+        let input = "C:\\Proj\\Src\\Main.ts\n";
+        let set = parse_list_files_output(input);
+        assert_eq!(set.len(), 1);
+        assert!(set.contains("c:/proj/src/main.ts"));
+    }
+
+    #[test]
+    fn parse_list_files_output_handles_blank_lines_and_whitespace() {
+        let input = "\n  /a/b.ts  \n\n  /c/d.ts\n  \n";
+        let set = parse_list_files_output(input);
+        assert_eq!(set.len(), 2);
+        assert!(set.contains("/a/b.ts"));
+        assert!(set.contains("/c/d.ts"));
+    }
 }
