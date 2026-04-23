@@ -1,19 +1,29 @@
 name: Release
 
 # Manual release. Pick a bump level and the workflow:
-#   1. resolves the next version from the current one in npm/tsgo-strict/package.json,
+#   1. resolves the next version from the latest `v*` git tag (not from
+#      package.json — the in-repo versions are intentionally stale and
+#      the tag is authoritative, matching @cx/dataprime-parser),
 #   2. cross-builds the CLI + N-API addon for all six target triples,
-#   3. stamps the new version into every publishable package.json (and rewrites
-#      the launcher's `workspace:*` optionalDeps to concrete pins),
+#   3. stamps the new version into every publishable package.json
+#      ephemerally in CI (rewriting the launcher's `workspace:*`
+#      optionalDeps to concrete pins),
 #   4. publishes each package to JFrog Artifactory
 #      (https://cgx.jfrog.io/artifactory/api/npm/internal.npm.coralogix.net/)
 #      under the `@cx` scope, authenticating via the JFROG_USER / JFROG_PASSWORD
 #      org secrets (the `auth/cx` endpoint returns a ready-to-use `~/.npmrc`),
-#   5. commits the bumped package.json files, tags `vX.Y.Z`, and pushes.
+#   5. tags the workflow's source commit `vX.Y.Z` and pushes only the tag.
 #
-# If the publish step fails, nothing is committed or pushed — the runner
-# simply exits. If the publish succeeded but the push fails, the packages
-# are already on JFrog; re-create the tag from the workflow run's commit SHA.
+# Nothing is ever pushed to master. The stamped package.json edits are
+# discarded when the runner exits; the in-repo versions stay at their
+# initial value forever. The git tag is the sole source of truth for
+# "what have we released". This sidesteps master's branch-protection
+# rules (signed commits + PR-only) without giving the workflow any
+# privileged access.
+#
+# If the publish step fails, nothing is tagged — the runner simply
+# exits. If the publish succeeded but the tag push fails, the packages
+# are already on JFrog; re-create the tag from the workflow run's SHA.
 on:
   workflow_dispatch:
     inputs:
@@ -35,6 +45,14 @@ on:
 permissions:
   contents: write
 
+# Only one release may run at a time. Two concurrent dispatches would
+# compute the same `next` version from the same tag, and the second
+# would fail with "version already exists" on JFrog. `cancel-in-progress:
+# false` lets the first run finish rather than killing it partway.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
 jobs:
   prepare:
     name: Resolve next version
@@ -44,14 +62,25 @@ jobs:
       version: ${{ steps.next.outputs.version }}
       tag: ${{ steps.next.outputs.tag }}
     steps:
+      # fetch-depth: 0 is required so git can see previous `v*` tags —
+      # we derive the current version from the latest tag, not from
+      # the in-repo package.json (which is frozen at its initial value).
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Compute next version
         id: next
         shell: bash
         run: |
           set -euo pipefail
-          current=$(node -p "require('./npm/tsgo-strict/package.json').version")
+          # Latest strict `vMAJOR.MINOR.PATCH` tag, or v0.0.0 if the repo
+          # has never released. The grep filter excludes pre-release tags
+          # (e.g. v0.2.0-rc1) that would break the three-segment bump
+          # computation below.
+          latest_tag=$(git tag --list 'v*' --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n1)
+          current="${latest_tag#v}"
+          current="${current:-0.0.0}"
           bump="${{ inputs.bump }}"
           next=$(node -e "
             const [maj, min, pat] = process.argv[1].split('.').map(Number);
@@ -61,7 +90,7 @@ jobs:
             else if (bump === 'major') console.log(\`\${maj + 1}.0.0\`);
             else { console.error('unknown bump ' + bump); process.exit(1); }
           " "$current" "$bump")
-          echo "current: ${current}"
+          echo "current: ${current} (from ${latest_tag:-no tag found})"
           echo "bump:    ${bump}"
           echo "next:    ${next}"
           echo "version=${next}" >> "$GITHUB_OUTPUT"
@@ -298,40 +327,25 @@ jobs:
           cd npm/tsgo-strict
           npm publish --loglevel=error --always_auth=true --unsafe-perm=true --scope=@cx
 
-      # Commit + tag + push only happens after publish succeeds, so a failed
-      # publish leaves origin untouched.
+      # Tag + push only happens after publish succeeds, so a failed
+      # publish leaves the remote tag-less. We deliberately do NOT
+      # commit or push to the release branch: master's branch protection
+      # (verified signatures, PR-only) would reject it, and it's not
+      # needed — the tag is the authoritative record of what was
+      # released. Stamped package.json / lockfile edits stay in the
+      # runner's ephemeral workspace and disappear with the job.
       #
-      # After tagging, restore the launcher's optionalDependencies back to
-      # `workspace:*` so the lockfile stays valid for local development.
-      # The stamped concrete versions only matter inside the published tarball.
-      - name: Commit, tag, and push
+      # The tag points at GITHUB_SHA (the commit the workflow ran
+      # against), not the in-runner HEAD, since nothing was committed.
+      - name: Tag release and push tag
         if: '!inputs.dry_run'
         shell: bash
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add npm/tsgo-strict/package.json npm/platforms/*/package.json
-          git commit -m "chore(release): ${TAG}"
-          git tag -a "${TAG}" -m "Release ${TAG}"
-
-          # Restore workspace:* deps so the lockfile stays in sync
-          node -e "
-            const fs = require('fs');
-            const p = 'npm/tsgo-strict/package.json';
-            const pkg = JSON.parse(fs.readFileSync(p, 'utf8'));
-            if (pkg.optionalDependencies) {
-              for (const [name, spec] of Object.entries(pkg.optionalDependencies)) {
-                if (name.startsWith('@cx/tsgo-strict-')) {
-                  pkg.optionalDependencies[name] = 'workspace:*';
-                }
-              }
-            }
-            fs.writeFileSync(p, JSON.stringify(pkg, null, 2) + '\n');
-          "
-          git add npm/tsgo-strict/package.json
-          git commit -m "chore: restore workspace:* deps after release"
-          git push origin "HEAD:${GITHUB_REF_NAME}" --follow-tags
+          git tag -a "${TAG}" -m "Release ${TAG}" "${GITHUB_SHA}"
+          git push origin "${TAG}"
 
       - name: Create GitHub Release
         if: '!inputs.dry_run'
@@ -354,8 +368,8 @@ jobs:
               echo "- Mode: **dry-run** (no registry writes, no git push)"
             else
               echo "- Published \`@cx/tsgo-strict@${VERSION}\` and 5 \`@cx/tsgo-strict-*@${VERSION}\` platform packages to JFrog"
+              echo "- Pushed tag \`${TAG}\` pointing at \`${GITHUB_SHA}\`"
               echo "- Created GitHub Release \`${TAG}\`"
-              echo "- Committed version bump and pushed tag \`${TAG}\` to \`${GITHUB_REF_NAME}\`"
             fi
           } >> "$GITHUB_STEP_SUMMARY"
 
