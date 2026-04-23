@@ -251,6 +251,11 @@ pub(crate) fn build_glob_set(
                 format!("{}/{}", base.as_str().trim_end_matches('/'), pattern)
             };
 
+        // Collapse `.` and `..` segments so patterns like `./src/index.ts`
+        // anchor to `/proj/src/index.ts` instead of `/proj/./src/index.ts`,
+        // which globset would never match against the walker's real paths.
+        let anchored = posix_resolve(&anchored);
+
         if !anchored.contains('*') && !anchored.contains('?') {
             // Literal pattern: add both a literal match (for file paths like
             // "src/test-setup.ts") and a directory match (for directories like
@@ -318,6 +323,32 @@ mod tests {
             !set.is_match(Path::new("/project/src/other/foo.ts")),
             "should not match files outside directory"
         );
+    }
+
+    #[test]
+    fn build_glob_set_normalizes_dot_segments() {
+        // `./src/index.ts` must match `/project/src/index.ts`. Without
+        // collapsing `.` segments, the anchored pattern becomes
+        // `/project/./src/index.ts` and globset never matches the walker's
+        // real path `/project/src/index.ts`.
+        let base = Utf8PathBuf::from("/project");
+        let patterns = vec!["./src/index.ts".to_string()];
+        let set = build_glob_set(&patterns, &base).unwrap().unwrap();
+        assert!(
+            set.is_match(Path::new("/project/src/index.ts")),
+            "should match real path after collapsing ./ in pattern"
+        );
+    }
+
+    #[test]
+    fn build_glob_set_normalizes_dot_segments_in_wildcards() {
+        // Same collapsing rule applies to glob patterns with wildcards —
+        // `./src/**/*.ts` must match `/project/src/foo.ts`.
+        let base = Utf8PathBuf::from("/project");
+        let patterns = vec!["./src/**/*.ts".to_string()];
+        let set = build_glob_set(&patterns, &base).unwrap().unwrap();
+        assert!(set.is_match(Path::new("/project/src/foo.ts")));
+        assert!(set.is_match(Path::new("/project/src/deep/bar.ts")));
     }
 
     #[test]

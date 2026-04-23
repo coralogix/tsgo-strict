@@ -120,15 +120,39 @@ pub fn query_reachable_files(
 }
 
 /// Parse the line-per-file output of `tsgo --listFilesOnly` into a set of
-/// normalized paths (forward slashes, lowercase). Filters out node_modules.
+/// normalized paths (forward slashes, lowercase). Filters out node_modules
+/// and non-file lines (tsgo occasionally interleaves TS5090 / TS5102 config
+/// diagnostics on stdout when the tsconfig has issues — e.g. a legacy
+/// `baseUrl` — and we must not mistake those for file entries).
 pub fn parse_list_files_output(stdout: &str) -> HashSet<String> {
     stdout
         .lines()
         .map(|l| l.trim())
         .filter(|l| !l.is_empty())
         .filter(|l| !l.contains("/node_modules/") && !l.contains("\\node_modules\\"))
+        .filter(|l| is_listfiles_file_entry(l))
         .map(|l| l.replace('\\', "/").to_ascii_lowercase())
         .collect()
+}
+
+/// A real file entry is an absolute path (posix `/...` or Windows `X:\`)
+/// ending in a TypeScript extension. Diagnostic lines — even when they
+/// start with a file-ish path — carry `(line,col): error TSxxxx` decoration
+/// so they never end cleanly in a TS extension.
+fn is_listfiles_file_entry(line: &str) -> bool {
+    let bytes = line.as_bytes();
+    let absolute = line.starts_with('/')
+        || (bytes.len() >= 3
+            && bytes[1] == b':'
+            && (bytes[2] == b'\\' || bytes[2] == b'/'));
+    if !absolute {
+        return false;
+    }
+    let lower = line.to_ascii_lowercase();
+    lower.ends_with(".ts")
+        || lower.ends_with(".tsx")
+        || lower.ends_with(".cts")
+        || lower.ends_with(".mts")
 }
 
 #[cfg(test)]
@@ -156,6 +180,23 @@ mod tests {
         let set = parse_list_files_output(input);
         assert_eq!(set.len(), 1);
         assert!(set.contains("c:/proj/src/main.ts"));
+    }
+
+    #[test]
+    fn parse_list_files_output_drops_interleaved_tsgo_diagnostics() {
+        // tsgo emits TS5090/TS5102 diagnostics to stdout when the tsconfig has
+        // legacy options like `baseUrl`. Those lines look like
+        // `libs/foo/tsconfig.json(3,3): error TS5102: ...` — relative-ish,
+        // not ending in a TS extension — and must not be mistaken for files.
+        let input = "/proj/src/main.ts\n\
+                     libs/_data/olly/api-client/tsconfig.lib.json(3,3): error TS5090: non-relative paths are not allowed. did you forget a leading './'?\n\
+                     libs/_data/olly/api-client/tsconfig.lib.json(3,3): error TS5102: Option 'baseURL' has been removed. Please remove it from your configuration.\n\
+                     use '\"paths\": {\"*\": [\"../../../../*\"]}' instead.\n\
+                     /proj/src/util.ts\n";
+        let set = parse_list_files_output(input);
+        assert_eq!(set.len(), 2, "should keep only the two real files, got {set:?}");
+        assert!(set.contains("/proj/src/main.ts"));
+        assert!(set.contains("/proj/src/util.ts"));
     }
 
     #[test]

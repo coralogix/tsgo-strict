@@ -36,96 +36,19 @@ pub fn run_structured(options: &CliOptions) -> Result<StructuredOutcome, Error> 
     let context = load_project_context(&options.cwd, &options.project, STRICT_PLUGIN_NAME)?;
     timer.end("config-load");
 
+    let binary = resolve_tsgo_binary(&options.cwd)?;
+
     timer.start("file-resolution");
     let subset_files = resolve_subset_inputs(&options.subset_inputs, &options.cwd)?;
 
-    // When the user passes a subset, the subset IS the scope. Walking the whole
-    // project tsconfig include set would be wasted work. When no subset is
-    // given, we enumerate from the tsconfig.
-    let project_files: Vec<Utf8PathBuf> = if subset_files.is_empty() {
-        let mut files = enumerate_project_files(&context)?.files;
-
-        // When plugin `paths` are configured, walk those directories to discover
-        // transitively-imported files that may not appear in `files: [...]`.
-        if let Some(ref plugin_cfg) = context.strict_plugin_config {
-            if let Some(ref paths) = plugin_cfg.paths {
-                if !paths.is_empty() {
-                    let (exclude_patterns, exclude_base) = match &context.resolved_exclude {
-                        Some(f) => (f.patterns.clone(), f.config_dir.clone()),
-                        None => (Vec::new(), context.config_dir.clone()),
-                    };
-                    let walked = walk_plugin_paths(
-                        paths,
-                        &context.config_dir,
-                        &exclude_patterns,
-                        &exclude_base,
-                    )?;
-                    let existing: HashSet<String> = files.iter().map(normalize).collect();
-                    for f in walked {
-                        if !existing.contains(&normalize(&f)) {
-                            files.push(f);
-                        }
-                    }
-                }
-            }
-        }
-
-        files
-    } else {
-        // Even for subset files, honour the tsconfig exclude so that
-        // explicitly excluded files (e.g. test-setup.ts) are not checked.
-        let (exclude_patterns, exclude_base) = match context.resolved_exclude {
-            Some(ref f) => (f.patterns.clone(), f.config_dir.clone()),
-            None => (Vec::new(), context.config_dir.clone()),
-        };
-        if exclude_patterns.is_empty() {
-            subset_files.clone()
-        } else {
-            let exclude_set = build_glob_set(&exclude_patterns, &exclude_base)?;
-            match exclude_set {
-                Some(set) => subset_files
-                    .iter()
-                    .filter(|f| !set.is_match(f.as_std_path()))
-                    .cloned()
-                    .collect(),
-                None => subset_files.clone(),
-            }
-        }
-    };
-
-    let strict_candidates = find_strict_candidates(
-        project_files,
-        context.strict_plugin_config.as_ref(),
-        &context.config_dir,
+    let effective_targets = resolve_effective_targets(
+        &context,
+        &subset_files,
+        &binary,
+        &options.cwd,
+        &mut timer,
     )?;
-
-    let effective_targets = effective_targets(&strict_candidates, &subset_files);
     timer.end("file-resolution");
-
-    if effective_targets.is_empty() {
-        return Ok(StructuredOutcome {
-            diagnostics: Vec::new(),
-            timings: timer.entries().to_vec(),
-            exit_code: 0,
-        });
-    }
-
-    let binary = resolve_tsgo_binary(&options.cwd)?;
-
-    // Filter to only files reachable from the tsconfig's entry points. This
-    // excludes orphan files that live under plugin `paths` but are never
-    // imported. Skip when the user passed a subset — they explicitly chose.
-    let effective_targets = if subset_files.is_empty() {
-        timer.start("reachable-query");
-        let reachable = query_reachable_files(&binary, &context.project_path, &options.cwd)?;
-        timer.end("reachable-query");
-        effective_targets
-            .into_iter()
-            .filter(|f| reachable.contains(&normalize(f)))
-            .collect()
-    } else {
-        effective_targets
-    };
 
     if effective_targets.is_empty() {
         return Ok(StructuredOutcome {
@@ -176,11 +99,83 @@ pub fn list_files(options: &CliOptions) -> Result<Vec<Utf8PathBuf>, Error> {
     let context = load_project_context(&options.cwd, &options.project, STRICT_PLUGIN_NAME)?;
     timer.end("config-load");
 
+    let binary = resolve_tsgo_binary(&options.cwd)?;
+
     timer.start("file-resolution");
     let subset_files = resolve_subset_inputs(&options.subset_inputs, &options.cwd)?;
 
-    let project_files: Vec<Utf8PathBuf> = if subset_files.is_empty() {
-        let mut files = enumerate_project_files(&context)?.files;
+    let mut effective = resolve_effective_targets(
+        &context,
+        &subset_files,
+        &binary,
+        &options.cwd,
+        &mut timer,
+    )?;
+    timer.end("file-resolution");
+
+    effective.sort();
+    Ok(effective)
+}
+
+/// Compute the set of files tsgo should type-check.
+///
+/// Two modes:
+/// 1. **No plugin config + no user subset** — mirror tsc's compilation scope
+///    exactly. Target = full reachable graph from the tsconfig's entry points
+///    (via `tsgo --listFilesOnly`). No `enumerate`, no pragma filtering,
+///    no `paths`/`excludePattern` narrowing — those are plugin concepts, and
+///    when no plugin is configured the user wants identical-to-tsc behavior.
+/// 2. **Plugin config active or user-supplied subset** — enumerate the
+///    tsconfig's include/files, augment with plugin `paths` walks, filter
+///    through `find_strict_candidates` (pragma + plugin paths/exclude), then
+///    (if no subset) intersect with the reachable set to drop orphans.
+fn resolve_effective_targets(
+    context: &crate::config::ProjectContext,
+    subset_files: &[Utf8PathBuf],
+    binary: &Utf8PathBuf,
+    cwd: &Utf8PathBuf,
+    timer: &mut Timer,
+) -> Result<Vec<Utf8PathBuf>, Error> {
+    if subset_files.is_empty() && context.strict_plugin_config.is_none() {
+        timer.start("reachable-query");
+        let reachable = query_reachable_files(binary, &context.project_path, cwd)?;
+        timer.end("reachable-query");
+        return Ok(reachable.into_iter().map(Utf8PathBuf::from).collect());
+    }
+
+    let project_files = resolve_project_files(context, subset_files)?;
+
+    let strict_candidates = find_strict_candidates(
+        project_files,
+        context.strict_plugin_config.as_ref(),
+        &context.config_dir,
+    )?;
+
+    let candidates = effective_targets(&strict_candidates, subset_files);
+
+    if subset_files.is_empty() && !candidates.is_empty() {
+        timer.start("reachable-query");
+        let reachable = query_reachable_files(binary, &context.project_path, cwd)?;
+        timer.end("reachable-query");
+        Ok(candidates
+            .into_iter()
+            .filter(|f| reachable.contains(&normalize(f)))
+            .collect())
+    } else {
+        Ok(candidates)
+    }
+}
+
+/// Gather the tsconfig's candidate file set before strict filtering.
+/// When the user passes a subset it IS the scope (still honouring tsconfig
+/// exclude for things like `test-setup.ts`). Otherwise enumerate from the
+/// tsconfig, and augment with plugin `paths` walks when plugin is active.
+fn resolve_project_files(
+    context: &crate::config::ProjectContext,
+    subset_files: &[Utf8PathBuf],
+) -> Result<Vec<Utf8PathBuf>, Error> {
+    if subset_files.is_empty() {
+        let mut files = enumerate_project_files(context)?.files;
 
         if let Some(ref plugin_cfg) = context.strict_plugin_config {
             if let Some(ref paths) = plugin_cfg.paths {
@@ -205,47 +200,26 @@ pub fn list_files(options: &CliOptions) -> Result<Vec<Utf8PathBuf>, Error> {
             }
         }
 
-        files
+        Ok(files)
     } else {
         let (exclude_patterns, exclude_base) = match context.resolved_exclude {
             Some(ref f) => (f.patterns.clone(), f.config_dir.clone()),
             None => (Vec::new(), context.config_dir.clone()),
         };
         if exclude_patterns.is_empty() {
-            subset_files.clone()
+            Ok(subset_files.to_vec())
         } else {
             let exclude_set = build_glob_set(&exclude_patterns, &exclude_base)?;
             match exclude_set {
-                Some(set) => subset_files
+                Some(set) => Ok(subset_files
                     .iter()
                     .filter(|f| !set.is_match(f.as_std_path()))
                     .cloned()
-                    .collect(),
-                None => subset_files.clone(),
+                    .collect()),
+                None => Ok(subset_files.to_vec()),
             }
         }
-    };
-
-    let strict_candidates = find_strict_candidates(
-        project_files,
-        context.strict_plugin_config.as_ref(),
-        &context.config_dir,
-    )?;
-
-    let mut effective = effective_targets(&strict_candidates, &subset_files);
-    timer.end("file-resolution");
-
-    // Filter to only files reachable from the tsconfig's entry points.
-    if subset_files.is_empty() && !effective.is_empty() {
-        let binary = resolve_tsgo_binary(&options.cwd)?;
-        timer.start("reachable-query");
-        let reachable = query_reachable_files(&binary, &context.project_path, &options.cwd)?;
-        timer.end("reachable-query");
-        effective.retain(|f| reachable.contains(&normalize(f)));
     }
-
-    effective.sort();
-    Ok(effective)
 }
 
 pub fn run(options: &CliOptions) -> Result<RunOutcome, Error> {
