@@ -1,20 +1,21 @@
 import { defineConfig } from 'vitepress';
 
-const GITHUB = 'https://github.com/ashley-hunter/tsgo-strict';
-const SITE_URL = 'https://ashley-hunter.github.io/tsgo-strict/';
+const GITHUB = 'https://github.com/coralogix/internal-tsgo-strict';
+const BASE = process.env.DOCS_BASE ?? '/';
+const SITE_URL = process.env.DOCS_SITE_URL ?? `https://refactored-disco-1qv15pr.pages.github.io${BASE}`;
 const DESCRIPTION =
   'Strict TypeScript. One file at a time. A fast, Rust-powered strict-only type checker built on Microsoft\'s tsgo.';
 
 export default defineConfig({
   title: 'tsgo-strict',
   description: DESCRIPTION,
-  base: '/tsgo-strict/',
+  base: BASE,
   lang: 'en-US',
   cleanUrls: true,
   lastUpdated: true,
   sitemap: { hostname: SITE_URL },
   head: [
-    ['link', { rel: 'icon', type: 'image/svg+xml', href: '/tsgo-strict/logo.svg' }],
+    ['link', { rel: 'icon', type: 'image/svg+xml', href: `${BASE}logo.svg` }],
     ['meta', { name: 'theme-color', content: '#3178c6' }],
     ['meta', { property: 'og:type', content: 'website' }],
     ['meta', { property: 'og:title', content: 'tsgo-strict — Strict TypeScript, one file at a time' }],
@@ -85,12 +86,12 @@ export default defineConfig({
     },
 
     footer: {
-      message: 'Released under the MIT License.',
-      copyright: `Copyright © ${new Date().getFullYear()} Ashley Hunter`,
+      message: 'Released under the Apache 2.0 License.',
+      copyright: `Copyright © ${new Date().getFullYear()} Coralogix`,
     },
 
     editLink: {
-      pattern: `${GITHUB}/edit/main/docs/:path`,
+      pattern: `${GITHUB}/edit/master/docs/:path`,
       text: 'Edit this page on GitHub',
     },
 

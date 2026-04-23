@@ -15,15 +15,15 @@ This page gets you from zero to a first strict check in about two minutes.
 ::: code-group
 
 ```bash [npm]
-npm install --save-dev @coralogix/tsgo-strict @typescript/native-preview
+npm install --save-dev @cx/tsgo-strict @typescript/native-preview
 ```
 
 ```bash [pnpm]
-pnpm add -D @coralogix/tsgo-strict @typescript/native-preview
+pnpm add -D @cx/tsgo-strict @typescript/native-preview
 ```
 
 ```bash [yarn]
-yarn add -D @coralogix/tsgo-strict @typescript/native-preview
+yarn add -D @cx/tsgo-strict @typescript/native-preview
 ```
 
 :::
@@ -33,7 +33,7 @@ any `tsgo` available on `PATH`, in `node_modules/.bin`, or via the
 `TSGO_BINARY` env var works too.
 
 On install, npm will pick up exactly one of the
-`@coralogix/tsgo-strict-<platform>` subpackages (via `optionalDependencies`) and use
+`@cx/tsgo-strict-<platform>` subpackages (via `optionalDependencies`) and use
 its prebuilt native binary. No compile step runs on your machine.
 
 ## Configure a strict subset

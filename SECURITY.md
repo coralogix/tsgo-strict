@@ -1,18 +1,9 @@
-# Security Policy
+We deeply appreciate any effort to discover and disclose security vulnerabilities responsibly.
 
-## Supported versions
+If you would like to report a vulnerability in one of our products, or have security concerns regarding Coralogix software, please email security@coralogix.com.
 
-Only the latest released version is supported with security fixes.
+In order for us to best respond to your report, please include any of the following:
 
-## Reporting a vulnerability
-
-Please report vulnerabilities privately using GitHub Security Advisories for this repository.
-
-Do not open public issues for security vulnerabilities.
-
-When reporting, include:
-
-- Description of the issue
-- Impact assessment
-- Reproduction steps or proof of concept
-- Suggested mitigation (if known)
+1. Steps to reproduce or proof-of-concept
+2. Any relevant tools, including versions used
+3. Tool output

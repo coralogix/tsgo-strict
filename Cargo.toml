@@ -6,8 +6,8 @@ members = ["crates/tsgo-strict", "crates/tsgo-strict-core", "crates/tsgo-strict-
 version = "0.1.0"
 edition = "2021"
 rust-version = "1.80"
-license = "MIT"
-repository = "https://github.com/ashley-hunter/tsgo-strict"
+license = "Apache-2.0"
+repository = "https://github.com/coralogix/internal-tsgo-strict"
 description = "High-performance strict-only TypeScript checking with tsgo and subset file support"
 
 [workspace.dependencies]

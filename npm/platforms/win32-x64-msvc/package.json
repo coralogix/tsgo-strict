@@ -1,11 +1,14 @@
 {
-  "name": "@coralogix/tsgo-strict-win32-x64-msvc",
-  "version": "0.1.20",
+  "name": "@cx/tsgo-strict-win32-x64-msvc",
+  "version": "0.1.0",
   "description": "Native tsgo-strict binary for Windows x64 (MSVC)",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/coralogix/internal-tsgo-strict.git"
+  },
+  "publishConfig": {
+    "registry": "https://cgx.jfrog.io/artifactory/api/npm/internal.npm.coralogix.net/"
   },
   "main": "native/tsgo-strict.node",
   "files": [

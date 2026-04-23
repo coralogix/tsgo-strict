@@ -34,19 +34,19 @@ importers:
         specifier: ^2.0.3
         version: 2.1.2
     optionalDependencies:
-      '@coralogix/tsgo-strict-darwin-arm64':
+      '@cx/tsgo-strict-darwin-arm64':
         specifier: workspace:*
         version: link:../platforms/darwin-arm64
-      '@coralogix/tsgo-strict-linux-arm64-gnu':
+      '@cx/tsgo-strict-linux-arm64-gnu':
         specifier: workspace:*
         version: link:../platforms/linux-arm64-gnu
-      '@coralogix/tsgo-strict-linux-x64-gnu':
+      '@cx/tsgo-strict-linux-x64-gnu':
         specifier: workspace:*
         version: link:../platforms/linux-x64-gnu
-      '@coralogix/tsgo-strict-linux-x64-musl':
+      '@cx/tsgo-strict-linux-x64-musl':
         specifier: workspace:*
         version: link:../platforms/linux-x64-musl
-      '@coralogix/tsgo-strict-win32-x64-msvc':
+      '@cx/tsgo-strict-win32-x64-msvc':
         specifier: workspace:*
         version: link:../platforms/win32-x64-msvc
 
