@@ -1,7 +1,7 @@
-// Type definitions for `tsgo-strict`.
+// Type definitions for `@coralogix/tsgo-strict`.
 //
 // The runtime surface is implemented in `index.js` and backed by a native
-// N-API addon shipped in `@tsgo-strict/<triple>` platform subpackages.
+// N-API addon shipped in `@coralogix/tsgo-strict-<triple>` platform subpackages.
 
 export type Category = 'error' | 'warning' | 'message';
 

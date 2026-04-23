@@ -90,9 +90,9 @@ export function notYet() { /* forced out */ }
 ## Install
 
 ```bash
-npm install --save-dev tsgo-strict @typescript/native-preview
+npm install --save-dev @coralogix/tsgo-strict @typescript/native-preview
 # or
-pnpm add -D tsgo-strict @typescript/native-preview
+pnpm add -D @coralogix/tsgo-strict @typescript/native-preview
 ```
 
 `@typescript/native-preview` is declared as an optional peer dependency — any
@@ -122,7 +122,7 @@ Environment:
 ## Programmatic API
 
 ```js
-import { run } from 'tsgo-strict';
+import { run } from '@coralogix/tsgo-strict';
 
 const result = await run({
   project: 'tsconfig.json',

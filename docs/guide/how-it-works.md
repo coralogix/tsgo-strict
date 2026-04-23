@@ -60,9 +60,9 @@ The first hit wins.
 
 The package ships as:
 
-- An npm **launcher** (`tsgo-strict`) containing the JS entry points and
+- An npm **launcher** (`@coralogix/tsgo-strict`) containing the JS entry points and
   type definitions.
-- Six per-platform subpackages (`@tsgo-strict/<target>`) containing the
+- Per-platform subpackages (`@coralogix/tsgo-strict-<target>`) containing the
   prebuilt binary + N-API addon for that platform, declared as
   `optionalDependencies`.
 
