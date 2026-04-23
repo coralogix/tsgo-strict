@@ -109,16 +109,14 @@ pub fn list_files(options: &CliOptions) -> Result<Vec<Utf8PathBuf>, Error> {
 
 /// Compute the set of files tsgo should type-check.
 ///
-/// Two modes:
-/// 1. **No plugin config + no user subset** — mirror tsc's compilation scope
-///    exactly. Target = full reachable graph from the tsconfig's entry points
-///    (via `tsgo --listFilesOnly`). No `enumerate`, no pragma filtering,
-///    no `paths`/`excludePattern` narrowing — those are plugin concepts, and
-///    when no plugin is configured the user wants identical-to-tsc behavior.
-/// 2. **Plugin config active or user-supplied subset** — enumerate the
-///    tsconfig's include/files, augment with plugin `paths` walks, filter
-///    through `find_strict_candidates` (pragma + plugin paths/exclude), then
-///    (if no subset) intersect with the reachable set to drop orphans.
+/// Always scope to the files named by the tsconfig's `include` / `files`
+/// (possibly augmented by plugin `paths` walks), filtered through
+/// `find_strict_candidates` (pragma + plugin `paths`/`excludePattern`), then
+/// intersected with the reachable set to drop orphans that match the include
+/// glob but are never imported. The reachable set is a **filter**, never the
+/// source set — feeding it back as the effective targets would pull in
+/// cross-lib transitive imports and break per-lib strict-check scoping
+/// (every lib would suddenly see errors from every dependency).
 fn resolve_effective_targets(
     context: &crate::config::ProjectContext,
     subset_files: &[Utf8PathBuf],
@@ -126,36 +124,63 @@ fn resolve_effective_targets(
     cwd: &Utf8PathBuf,
     timer: &mut Timer,
 ) -> Result<Vec<Utf8PathBuf>, Error> {
-    if subset_files.is_empty() && context.strict_plugin_config.is_none() {
-        timer.start("reachable-query");
-        let reachable = query_reachable_files(binary, &context.project_path, cwd)?;
-        timer.end("reachable-query");
-        return Ok(reachable.into_iter().map(Utf8PathBuf::from).collect());
-    }
-
     let project_files = resolve_project_files(context, subset_files)?;
 
-    let strict_candidates = find_strict_candidates(
+    // Reachable is only needed to drop orphans from the enumerate set. Skip
+    // the query when a user subset was supplied — they explicitly chose.
+    let reachable: Option<Vec<String>> = if subset_files.is_empty() {
+        timer.start("reachable-query");
+        let r = query_reachable_files(binary, &context.project_path, cwd)?;
+        timer.end("reachable-query");
+        Some(r)
+    } else {
+        None
+    };
+
+    select_effective_targets(
         project_files,
+        reachable.as_deref(),
         context.strict_plugin_config.as_ref(),
         &context.config_dir,
-    )?;
+        subset_files,
+    )
+}
 
-    let candidates = effective_targets(&strict_candidates, subset_files);
+/// Pure selection logic — no IO — so it can be unit-tested by supplying
+/// mock `project_files` and `reachable` sets.
+///
+/// Contract:
+/// * `project_files` is the enumerate-based candidate set (already augmented
+///   with plugin `paths` walks upstream). This is the *only* source of
+///   truth for which files belong to the current strict-check scope.
+/// * `reachable`, when `Some`, is an *orphan filter* — candidates not in the
+///   reachable set are dropped. It must never be used as the source set.
+/// * `subset` shortcut: a caller-supplied file list takes precedence over
+///   the reachable orphan filter (the user explicitly chose).
+fn select_effective_targets(
+    project_files: Vec<Utf8PathBuf>,
+    reachable: Option<&[String]>,
+    strict_plugin_config: Option<&crate::config::StrictPluginConfig>,
+    config_dir: &Utf8PathBuf,
+    subset: &[Utf8PathBuf],
+) -> Result<Vec<Utf8PathBuf>, Error> {
+    let strict_candidates =
+        find_strict_candidates(project_files, strict_plugin_config, config_dir)?;
+    let candidates = effective_targets(&strict_candidates, subset);
 
-    if subset_files.is_empty() && !candidates.is_empty() {
-        timer.start("reachable-query");
-        let reachable = query_reachable_files(binary, &context.project_path, cwd)?;
-        timer.end("reachable-query");
-        let reachable_norm: HashSet<String> =
-            reachable.iter().map(|s| s.to_ascii_lowercase()).collect();
-        Ok(candidates
-            .into_iter()
-            .filter(|f| reachable_norm.contains(&normalize(f)))
-            .collect())
-    } else {
-        Ok(candidates)
+    if subset.is_empty() && !candidates.is_empty() {
+        if let Some(reachable_paths) = reachable {
+            let reachable_set: HashSet<String> = reachable_paths
+                .iter()
+                .map(|s| s.to_ascii_lowercase())
+                .collect();
+            return Ok(candidates
+                .into_iter()
+                .filter(|f| reachable_set.contains(&normalize(f)))
+                .collect());
+        }
     }
+    Ok(candidates)
 }
 
 /// Gather the tsconfig's candidate file set before strict filtering.
@@ -340,6 +365,114 @@ mod tests {
         let subset = vec![Utf8PathBuf::from("/p/b.ts"), Utf8PathBuf::from("/p/c.ts")];
         let got = effective_targets(&candidates, &subset);
         assert_eq!(got, vec![Utf8PathBuf::from("/p/b.ts")]);
+    }
+
+    // ------------------------------------------------------------------
+    // select_effective_targets — regression tests for per-lib scoping.
+    //
+    // The "reachable" set from `tsgo --listFilesOnly` is the *full
+    // compilation graph* and in a monorepo it transitively pulls in files
+    // from every dependency lib. If we ever use it as the source set
+    // instead of as an orphan filter, a per-lib strict-check would
+    // suddenly report errors from unrelated libs. These tests lock the
+    // scoping contract down.
+    // ------------------------------------------------------------------
+
+    fn cfg_dir() -> Utf8PathBuf {
+        Utf8PathBuf::from("/proj/libs/core")
+    }
+
+    #[test]
+    fn select_effective_targets_no_plugin_no_subset_does_not_leak_reachable_only_files() {
+        // Enumerate returned 2 files in THIS lib. Reachable additionally
+        // contains a cross-lib file (common in a monorepo where a test
+        // imports from a sibling lib). The effective set must be the
+        // two in-lib files only — never the cross-lib one.
+        let project_files = vec![
+            Utf8PathBuf::from("/proj/libs/core/src/a.ts"),
+            Utf8PathBuf::from("/proj/libs/core/src/b.ts"),
+        ];
+        let reachable = vec![
+            "/proj/libs/core/src/a.ts".to_string(),
+            "/proj/libs/core/src/b.ts".to_string(),
+            "/proj/libs/utils/src/other.ts".to_string(), // cross-lib
+        ];
+        let result = select_effective_targets(
+            project_files.clone(),
+            Some(&reachable),
+            None, // no plugin
+            &cfg_dir(),
+            &[], // no subset
+        )
+        .unwrap();
+        let mut result_paths: Vec<String> = result.iter().map(|p| p.to_string()).collect();
+        result_paths.sort();
+        assert_eq!(
+            result_paths,
+            vec![
+                "/proj/libs/core/src/a.ts".to_string(),
+                "/proj/libs/core/src/b.ts".to_string(),
+            ],
+            "must scope to project_files, never use reachable as the source set"
+        );
+    }
+
+    #[test]
+    fn select_effective_targets_drops_orphans_not_in_reachable() {
+        // An orphan file (matches include glob but is never imported).
+        // Reachable excludes it, so effective targets must drop it.
+        let project_files = vec![
+            Utf8PathBuf::from("/proj/libs/core/src/used.ts"),
+            Utf8PathBuf::from("/proj/libs/core/src/orphan.ts"),
+        ];
+        let reachable = vec!["/proj/libs/core/src/used.ts".to_string()];
+        let result =
+            select_effective_targets(project_files, Some(&reachable), None, &cfg_dir(), &[])
+                .unwrap();
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].to_string(), "/proj/libs/core/src/used.ts");
+    }
+
+    #[test]
+    fn select_effective_targets_intersects_case_insensitively() {
+        // Filesystem walk gave us original-case paths; tsgo emits
+        // lowercased paths on case-insensitive filesystems. The filter
+        // must match regardless.
+        let project_files = vec![Utf8PathBuf::from("/Proj/Libs/Core/Src/A.ts")];
+        let reachable = vec!["/proj/libs/core/src/a.ts".to_string()];
+        let result =
+            select_effective_targets(project_files, Some(&reachable), None, &cfg_dir(), &[])
+                .unwrap();
+        assert_eq!(result.len(), 1, "case-mismatched paths must still match");
+        assert_eq!(result[0].to_string(), "/Proj/Libs/Core/Src/A.ts");
+    }
+
+    #[test]
+    fn select_effective_targets_with_subset_skips_reachable_filter() {
+        // The user explicitly named files — we must not filter them
+        // against reachable (the subset IS the authoritative scope).
+        let project_files = vec![Utf8PathBuf::from("/proj/libs/core/src/a.ts")];
+        let subset = vec![Utf8PathBuf::from("/proj/libs/core/src/a.ts")];
+        // Even with empty reachable, the subset survives.
+        let empty_reachable: Vec<String> = Vec::new();
+        let result = select_effective_targets(
+            project_files,
+            Some(&empty_reachable),
+            None,
+            &cfg_dir(),
+            &subset,
+        )
+        .unwrap();
+        assert_eq!(result.len(), 1);
+    }
+
+    #[test]
+    fn select_effective_targets_no_reachable_returns_candidates_verbatim() {
+        // When the orchestrator didn't query reachable (e.g. user passed
+        // subset), we must not silently drop candidates.
+        let project_files = vec![Utf8PathBuf::from("/proj/libs/core/src/a.ts")];
+        let result = select_effective_targets(project_files, None, None, &cfg_dir(), &[]).unwrap();
+        assert_eq!(result.len(), 1);
     }
 
     fn make_run_result(
