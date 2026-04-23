@@ -41,13 +41,8 @@ pub fn run_structured(options: &CliOptions) -> Result<StructuredOutcome, Error> 
     timer.start("file-resolution");
     let subset_files = resolve_subset_inputs(&options.subset_inputs, &options.cwd)?;
 
-    let effective_targets = resolve_effective_targets(
-        &context,
-        &subset_files,
-        &binary,
-        &options.cwd,
-        &mut timer,
-    )?;
+    let effective_targets =
+        resolve_effective_targets(&context, &subset_files, &binary, &options.cwd, &mut timer)?;
     timer.end("file-resolution");
 
     if effective_targets.is_empty() {
@@ -104,13 +99,8 @@ pub fn list_files(options: &CliOptions) -> Result<Vec<Utf8PathBuf>, Error> {
     timer.start("file-resolution");
     let subset_files = resolve_subset_inputs(&options.subset_inputs, &options.cwd)?;
 
-    let mut effective = resolve_effective_targets(
-        &context,
-        &subset_files,
-        &binary,
-        &options.cwd,
-        &mut timer,
-    )?;
+    let mut effective =
+        resolve_effective_targets(&context, &subset_files, &binary, &options.cwd, &mut timer)?;
     timer.end("file-resolution");
 
     effective.sort();

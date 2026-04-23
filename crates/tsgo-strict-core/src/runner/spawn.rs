@@ -142,9 +142,7 @@ pub fn parse_list_files_output(stdout: &str) -> HashSet<String> {
 fn is_listfiles_file_entry(line: &str) -> bool {
     let bytes = line.as_bytes();
     let absolute = line.starts_with('/')
-        || (bytes.len() >= 3
-            && bytes[1] == b':'
-            && (bytes[2] == b'\\' || bytes[2] == b'/'));
+        || (bytes.len() >= 3 && bytes[1] == b':' && (bytes[2] == b'\\' || bytes[2] == b'/'));
     if !absolute {
         return false;
     }
@@ -194,7 +192,11 @@ mod tests {
                      use '\"paths\": {\"*\": [\"../../../../*\"]}' instead.\n\
                      /proj/src/util.ts\n";
         let set = parse_list_files_output(input);
-        assert_eq!(set.len(), 2, "should keep only the two real files, got {set:?}");
+        assert_eq!(
+            set.len(),
+            2,
+            "should keep only the two real files, got {set:?}"
+        );
         assert!(set.contains("/proj/src/main.ts"));
         assert!(set.contains("/proj/src/util.ts"));
     }
