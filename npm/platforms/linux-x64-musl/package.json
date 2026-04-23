@@ -1,6 +1,6 @@
 {
-  "name": "@coralogix/tsgo-strict-linux-x64-musl",
-  "version": "0.1.20",
+  "name": "@cx/tsgo-strict-linux-x64-musl",
+  "version": "0.1.0",
   "description": "Native tsgo-strict binary for Linux x64 (musl)",
   "license": "MIT",
   "repository": {
