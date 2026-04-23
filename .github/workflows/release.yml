@@ -325,7 +325,7 @@ jobs:
             const pkg = JSON.parse(fs.readFileSync(p, 'utf8'));
             if (pkg.optionalDependencies) {
               for (const [name, spec] of Object.entries(pkg.optionalDependencies)) {
-                if (name.startsWith('@tsgo-strict/')) {
+                if (name.startsWith('@coralogix/tsgo-strict-')) {
                   pkg.optionalDependencies[name] = 'workspace:*';
                 }
               }
@@ -356,8 +356,59 @@ jobs:
             if [[ "${{ inputs.dry_run }}" == "true" ]]; then
               echo "- Mode: **dry-run** (no npm writes, no git push)"
             else
-              echo "- Published \`tsgo-strict@${VERSION}\` and 6 \`@tsgo-strict/*@${VERSION}\` platform packages"
+              echo "- Published \`@coralogix/tsgo-strict@${VERSION}\` and 5 \`@coralogix/tsgo-strict-*@${VERSION}\` platform packages"
               echo "- Created GitHub Release \`${TAG}\`"
               echo "- Committed version bump and pushed tag \`${TAG}\` to \`${GITHUB_REF_NAME}\`"
             fi
           } >> "$GITHUB_STEP_SUMMARY"
+
+  docs:
+    name: Publish docs
+    needs: [prepare, publish]
+    if: '!inputs.dry_run'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Default checkout (GITHUB_SHA) intentionally — the `publish` job pushes
+    # stamped-version commits that desync package.json from pnpm-lock.yaml,
+    # which would break `--frozen-lockfile` if we checked out the tag here.
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build docs
+        run: pnpm docs:build
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs/.vitepress/dist
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
