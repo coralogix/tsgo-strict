@@ -3,7 +3,6 @@ use crate::errors::Error;
 use crate::runner::parse::parse_diagnostics;
 use crate::runner::temp_config::{write_temp_config, TempConfig};
 use camino::Utf8PathBuf;
-use std::collections::HashSet;
 use std::process::Command;
 use std::time::Instant;
 
@@ -80,12 +79,16 @@ pub fn run_tsgo(input: RunInput<'_>) -> Result<TsgoRunResult, Error> {
 }
 
 /// Run `tsgo --listFilesOnly` against the original tsconfig and return the
-/// compiler's reachable file set as normalized absolute paths.
+/// compiler's reachable file set. Paths are returned in their original case
+/// (only `\` → `/` separator normalization is applied) so that downstream
+/// consumers can pass them back to tsgo as `files: [...]` without creating
+/// case-duplicate entries (TS1149) on case-insensitive filesystems. Callers
+/// that need a containment set should build a lowercased set themselves.
 pub fn query_reachable_files(
     binary: &Utf8PathBuf,
     project_path: &Utf8PathBuf,
     cwd: &Utf8PathBuf,
-) -> Result<HashSet<String>, Error> {
+) -> Result<Vec<String>, Error> {
     let output = Command::new(binary.as_std_path())
         .args([
             "--listFilesOnly",
@@ -119,19 +122,20 @@ pub fn query_reachable_files(
     Ok(parse_list_files_output(&stdout))
 }
 
-/// Parse the line-per-file output of `tsgo --listFilesOnly` into a set of
-/// normalized paths (forward slashes, lowercase). Filters out node_modules
-/// and non-file lines (tsgo occasionally interleaves TS5090 / TS5102 config
-/// diagnostics on stdout when the tsconfig has issues — e.g. a legacy
-/// `baseUrl` — and we must not mistake those for file entries).
-pub fn parse_list_files_output(stdout: &str) -> HashSet<String> {
+/// Parse the line-per-file output of `tsgo --listFilesOnly` into a list of
+/// absolute file paths (forward-slash separators, original case preserved).
+/// Filters out node_modules and non-file lines — tsgo occasionally
+/// interleaves TS5090 / TS5102 config diagnostics on stdout when the
+/// tsconfig has issues (e.g. a legacy `baseUrl`), and we must not mistake
+/// those for file entries.
+pub fn parse_list_files_output(stdout: &str) -> Vec<String> {
     stdout
         .lines()
         .map(|l| l.trim())
         .filter(|l| !l.is_empty())
         .filter(|l| !l.contains("/node_modules/") && !l.contains("\\node_modules\\"))
         .filter(|l| is_listfiles_file_entry(l))
-        .map(|l| l.replace('\\', "/").to_ascii_lowercase())
+        .map(|l| l.replace('\\', "/"))
         .collect()
 }
 
@@ -166,18 +170,21 @@ mod tests {
     #[test]
     fn parse_list_files_output_filters_node_modules() {
         let input = "/proj/src/main.ts\n/proj/node_modules/lib/index.d.ts\n/proj/src/util.ts\n";
-        let set = parse_list_files_output(input);
-        assert_eq!(set.len(), 2);
-        assert!(set.contains("/proj/src/main.ts"));
-        assert!(set.contains("/proj/src/util.ts"));
+        let files = parse_list_files_output(input);
+        assert_eq!(files.len(), 2);
+        assert!(files.iter().any(|f| f == "/proj/src/main.ts"));
+        assert!(files.iter().any(|f| f == "/proj/src/util.ts"));
     }
 
     #[test]
-    fn parse_list_files_output_normalizes_backslashes_and_case() {
+    fn parse_list_files_output_preserves_case_and_normalizes_separators() {
+        // Case must be preserved verbatim — passing lowercased paths back to
+        // tsgo via `files: [...]` would create case-duplicate program entries
+        // on case-insensitive filesystems (TS1149).
         let input = "C:\\Proj\\Src\\Main.ts\n";
-        let set = parse_list_files_output(input);
-        assert_eq!(set.len(), 1);
-        assert!(set.contains("c:/proj/src/main.ts"));
+        let files = parse_list_files_output(input);
+        assert_eq!(files.len(), 1);
+        assert_eq!(files[0], "C:/Proj/Src/Main.ts");
     }
 
     #[test]
@@ -191,22 +198,22 @@ mod tests {
                      libs/_data/olly/api-client/tsconfig.lib.json(3,3): error TS5102: Option 'baseURL' has been removed. Please remove it from your configuration.\n\
                      use '\"paths\": {\"*\": [\"../../../../*\"]}' instead.\n\
                      /proj/src/util.ts\n";
-        let set = parse_list_files_output(input);
+        let files = parse_list_files_output(input);
         assert_eq!(
-            set.len(),
+            files.len(),
             2,
-            "should keep only the two real files, got {set:?}"
+            "should keep only the two real files, got {files:?}"
         );
-        assert!(set.contains("/proj/src/main.ts"));
-        assert!(set.contains("/proj/src/util.ts"));
+        assert!(files.iter().any(|f| f == "/proj/src/main.ts"));
+        assert!(files.iter().any(|f| f == "/proj/src/util.ts"));
     }
 
     #[test]
     fn parse_list_files_output_handles_blank_lines_and_whitespace() {
         let input = "\n  /a/b.ts  \n\n  /c/d.ts\n  \n";
-        let set = parse_list_files_output(input);
-        assert_eq!(set.len(), 2);
-        assert!(set.contains("/a/b.ts"));
-        assert!(set.contains("/c/d.ts"));
+        let files = parse_list_files_output(input);
+        assert_eq!(files.len(), 2);
+        assert!(files.iter().any(|f| f == "/a/b.ts"));
+        assert!(files.iter().any(|f| f == "/c/d.ts"));
     }
 }
