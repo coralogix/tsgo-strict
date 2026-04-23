@@ -1,0 +1,25 @@
+{
+  "name": "@tsgo-strict/linux-arm64-gnu",
+  "version": "0.1.20",
+  "description": "Native tsgo-strict binary for Linux arm64 (glibc)",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ashley-hunter/tsgo-strict.git"
+  },
+  "main": "native/tsgo-strict.node",
+  "files": [
+    "bin/tsgo-strict",
+    "native/tsgo-strict.node",
+    "README.md"
+  ],
+  "os": [
+    "linux"
+  ],
+  "cpu": [
+    "arm64"
+  ],
+  "libc": [
+    "glibc"
+  ]
+}
