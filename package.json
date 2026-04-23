@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "description": "Monorepo for tsgo-strict (Rust CLI + npm launcher + per-platform binaries)",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "packageManager": "pnpm@10.10.0",
   "workspaces": [
     "npm/tsgo-strict",

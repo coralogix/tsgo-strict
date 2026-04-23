@@ -9,10 +9,13 @@
     "strict",
     "cli"
   ],
-  "license": "MIT",
+  "license": "Apache-2.0",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/coralogix/internal-tsgo-strict.git"
+  },
+  "publishConfig": {
+    "registry": "https://cgx.jfrog.io/artifactory/api/npm/internal.npm.coralogix.net/"
   },
   "main": "index.js",
   "types": "index.d.ts",

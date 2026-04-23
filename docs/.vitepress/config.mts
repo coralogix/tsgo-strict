@@ -86,12 +86,12 @@ export default defineConfig({
     },
 
     footer: {
-      message: 'Released under the MIT License.',
-      copyright: `Copyright © ${new Date().getFullYear()} Ashley Hunter`,
+      message: 'Released under the Apache 2.0 License.',
+      copyright: `Copyright © ${new Date().getFullYear()} Coralogix`,
     },
 
     editLink: {
-      pattern: `${GITHUB}/edit/main/docs/:path`,
+      pattern: `${GITHUB}/edit/master/docs/:path`,
       text: 'Edit this page on GitHub',
     },
 
