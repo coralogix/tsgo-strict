@@ -1,0 +1,363 @@
+name: Release
+
+# Manual release. Pick a bump level and the workflow:
+#   1. resolves the next version from the current one in npm/tsgo-strict/package.json,
+#   2. cross-builds the CLI + N-API addon for all six target triples,
+#   3. stamps the new version into every publishable package.json (and rewrites
+#      the launcher's `workspace:*` optionalDeps to concrete pins),
+#   4. publishes each package to npm via trusted publishing (no token — the
+#      `id-token: write` permission lets npm exchange the workflow's GitHub
+#      OIDC token for a short-lived registry credential; npm >=11.5.1 does
+#      this exchange automatically when `--provenance` is passed),
+#   5. commits the bumped package.json files, tags `vX.Y.Z`, and pushes.
+#
+# If the publish step fails, nothing is committed or pushed — the runner
+# simply exits. If the publish succeeded but the push fails, the packages
+# are already on npm; re-create the tag from the workflow run's commit SHA.
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: Version bump type
+        required: true
+        type: choice
+        default: patch
+        options:
+          - patch
+          - minor
+          - major
+      dry_run:
+        description: Dry-run (skip npm publish + git push)
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  prepare:
+    name: Resolve next version
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    outputs:
+      version: ${{ steps.next.outputs.version }}
+      tag: ${{ steps.next.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compute next version
+        id: next
+        shell: bash
+        run: |
+          set -euo pipefail
+          current=$(node -p "require('./npm/tsgo-strict/package.json').version")
+          bump="${{ inputs.bump }}"
+          next=$(node -e "
+            const [maj, min, pat] = process.argv[1].split('.').map(Number);
+            const bump = process.argv[2];
+            if (bump === 'patch') console.log(\`\${maj}.\${min}.\${pat + 1}\`);
+            else if (bump === 'minor') console.log(\`\${maj}.\${min + 1}.0\`);
+            else if (bump === 'major') console.log(\`\${maj + 1}.0.0\`);
+            else { console.error('unknown bump ' + bump); process.exit(1); }
+          " "$current" "$bump")
+          echo "current: ${current}"
+          echo "bump:    ${bump}"
+          echo "next:    ${next}"
+          echo "version=${next}" >> "$GITHUB_OUTPUT"
+          echo "tag=v${next}" >> "$GITHUB_OUTPUT"
+          {
+            echo "### Release plan"
+            echo ""
+            echo "| Field | Value |"
+            echo "| --- | --- |"
+            echo "| Current | \`${current}\` |"
+            echo "| Bump | \`${bump}\` |"
+            echo "| Next | \`${next}\` |"
+            echo "| Tag | \`v${next}\` |"
+            echo "| Dry-run | \`${{ inputs.dry_run }}\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  build:
+    name: Build ${{ matrix.triple }}
+    needs: prepare
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - triple: linux-x64-gnu
+            target: x86_64-unknown-linux-gnu
+            runner: ubuntu-latest
+            cross: false
+            napi: true
+            bin_ext: ''
+            addon_src: libtsgo_strict_napi.so
+          - triple: linux-x64-musl
+            target: x86_64-unknown-linux-musl
+            runner: ubuntu-latest
+            cross: true
+            napi: false  # musl does not support cdylib
+            bin_ext: ''
+            addon_src: ''
+          - triple: linux-arm64-gnu
+            target: aarch64-unknown-linux-gnu
+            runner: ubuntu-latest
+            cross: true
+            napi: true
+            bin_ext: ''
+            addon_src: libtsgo_strict_napi.so
+          - triple: darwin-arm64
+            target: aarch64-apple-darwin
+            runner: macos-15
+            cross: false
+            napi: true
+            bin_ext: ''
+            addon_src: libtsgo_strict_napi.dylib
+          - triple: win32-x64-msvc
+            target: x86_64-pc-windows-msvc
+            runner: windows-latest
+            cross: false
+            napi: true
+            bin_ext: '.exe'
+            addon_src: tsgo_strict_napi.dll
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache cargo registry & target
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
+      - name: Install cross
+        if: matrix.cross
+        run: cargo install cross --locked
+
+      - name: Build CLI (native)
+        if: '!matrix.cross'
+        shell: bash
+        run: cargo build --release --target ${{ matrix.target }} -p tsgo-strict
+
+      - name: Build CLI (cross)
+        if: matrix.cross
+        shell: bash
+        run: cross build --release --target ${{ matrix.target }} -p tsgo-strict
+
+      - name: Build N-API addon (native)
+        if: matrix.napi && !matrix.cross
+        shell: bash
+        run: cargo build --release --target ${{ matrix.target }} -p tsgo-strict-napi
+
+      - name: Build N-API addon (cross)
+        if: matrix.napi && matrix.cross
+        shell: bash
+        run: cross build --release --target ${{ matrix.target }} -p tsgo-strict-napi
+
+      - name: Stage binary + addon into platform package
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p npm/platforms/${{ matrix.triple }}/bin
+          cp "target/${{ matrix.target }}/release/tsgo-strict${{ matrix.bin_ext }}" \
+             "npm/platforms/${{ matrix.triple }}/bin/tsgo-strict${{ matrix.bin_ext }}"
+          if [[ "${{ matrix.napi }}" == "true" ]]; then
+            mkdir -p npm/platforms/${{ matrix.triple }}/native
+            cp "target/${{ matrix.target }}/release/${{ matrix.addon_src }}" \
+               "npm/platforms/${{ matrix.triple }}/native/tsgo-strict.node"
+          fi
+
+      - name: Upload platform package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: platform-${{ matrix.triple }}
+          path: npm/platforms/${{ matrix.triple }}/
+          if-no-files-found: error
+
+  publish:
+    name: Publish to npm & tag
+    needs: [prepare, build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Trusted publishing needs no NPM_TOKEN: `id-token: write` gives this job a
+    # GitHub OIDC token, and `npm publish --provenance` (npm >=11.5.1)
+    # exchanges it for a short-lived publish credential at the registry.
+    # Requires each package's "Trusted Publishers" entry on npmjs.com to
+    # name this repo + this workflow file.
+    permissions:
+      contents: write
+      id-token: write
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+      TAG: ${{ needs.prepare.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: https://registry.npmjs.org
+
+      # Node 20 ships npm 10.x, which predates the OIDC exchange; trusted
+      # publishing needs 11.5.1 or newer.
+      - name: Upgrade npm to a version that supports trusted publishing
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install -g npm@latest
+          npm --version
+
+      - name: Download all platform artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: platform-*
+          path: npm/platforms/
+          merge-multiple: false
+
+      - name: Flatten artifact layout
+        shell: bash
+        run: |
+          set -euo pipefail
+          for d in npm/platforms/platform-*; do
+            triple="${d#npm/platforms/platform-}"
+            rm -rf "npm/platforms/${triple}"
+            mv "${d}" "npm/platforms/${triple}"
+          done
+          for d in npm/platforms/*/; do
+            echo "=== ${d} ==="
+            ls -la "${d}"
+            [[ -d "${d}bin" ]]    && ls -la "${d}bin"
+            [[ -d "${d}native" ]] && ls -la "${d}native"
+          done
+
+      # actions/upload-artifact@v4 strips the executable bit, so without
+      # this step the binary inside the platform tarball would be 0644
+      # and consumers hit EACCES when the launcher spawns it. Restore
+      # 0755 here so `npm publish` records it into the tarball.
+      - name: Mark platform binaries executable
+        shell: bash
+        run: |
+          set -euo pipefail
+          for f in npm/platforms/*/bin/tsgo-strict npm/platforms/*/bin/tsgo-strict.exe; do
+            if [[ -f "$f" ]]; then
+              chmod 0755 "$f"
+              echo "chmod +x $f"
+            fi
+          done
+
+      # Stamp the resolved version into the launcher + all platform
+      # package.json files, and rewrite the launcher's `workspace:*`
+      # optionalDependencies to concrete pins. `npm publish` does not resolve
+      # the pnpm `workspace:` protocol, so without this the published
+      # launcher would install a broken dep tree.
+      - name: Stamp versions into package.json files
+        shell: bash
+        run: node scripts/stamp-versions.mjs "${VERSION}"
+
+      # Dry-run: exercise the pack + manifest path without hitting the
+      # registry and without committing/pushing.
+      - name: Publish all packages (dry-run)
+        if: inputs.dry_run
+        shell: bash
+        run: |
+          set -euo pipefail
+          for d in npm/platforms/*/; do
+            echo "::group::dry-run publish ${d}"
+            (cd "$d" && npm publish --access public --provenance --dry-run)
+            echo "::endgroup::"
+          done
+          echo "::group::dry-run publish npm/tsgo-strict"
+          (cd npm/tsgo-strict && npm publish --access public --provenance --dry-run)
+          echo "::endgroup::"
+
+      # Real publish. Platform packages first so the launcher's
+      # optionalDependencies resolve on npm by the time it's published.
+      # Each `npm publish` performs its own OIDC exchange.
+      - name: Publish platform packages
+        if: '!inputs.dry_run'
+        shell: bash
+        run: |
+          set -euo pipefail
+          for d in npm/platforms/*/; do
+            echo "::group::publish ${d}"
+            (cd "$d" && npm publish --access public --provenance)
+            echo "::endgroup::"
+          done
+
+      - name: Publish main package
+        if: '!inputs.dry_run'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd npm/tsgo-strict
+          npm publish --access public --provenance
+
+      # Commit + tag + push only happens after publish succeeds, so a failed
+      # publish leaves origin untouched.
+      #
+      # After tagging, restore the launcher's optionalDependencies back to
+      # `workspace:*` so the lockfile stays valid for local development.
+      # The stamped concrete versions only matter inside the published tarball.
+      - name: Commit, tag, and push
+        if: '!inputs.dry_run'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add npm/tsgo-strict/package.json npm/platforms/*/package.json
+          git commit -m "chore(release): ${TAG}"
+          git tag -a "${TAG}" -m "Release ${TAG}"
+
+          # Restore workspace:* deps so the lockfile stays in sync
+          node -e "
+            const fs = require('fs');
+            const p = 'npm/tsgo-strict/package.json';
+            const pkg = JSON.parse(fs.readFileSync(p, 'utf8'));
+            if (pkg.optionalDependencies) {
+              for (const [name, spec] of Object.entries(pkg.optionalDependencies)) {
+                if (name.startsWith('@tsgo-strict/')) {
+                  pkg.optionalDependencies[name] = 'workspace:*';
+                }
+              }
+            }
+            fs.writeFileSync(p, JSON.stringify(pkg, null, 2) + '\n');
+          "
+          git add npm/tsgo-strict/package.json
+          git commit -m "chore: restore workspace:* deps after release"
+          git push origin "HEAD:${GITHUB_REF_NAME}" --follow-tags
+
+      - name: Create GitHub Release
+        if: '!inputs.dry_run'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${TAG}" \
+            --title "${TAG}" \
+            --generate-notes
+
+      - name: Release summary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "## Release ${TAG}"
+            echo ""
+            if [[ "${{ inputs.dry_run }}" == "true" ]]; then
+              echo "- Mode: **dry-run** (no npm writes, no git push)"
+            else
+              echo "- Published \`tsgo-strict@${VERSION}\` and 6 \`@tsgo-strict/*@${VERSION}\` platform packages"
+              echo "- Created GitHub Release \`${TAG}\`"
+              echo "- Committed version bump and pushed tag \`${TAG}\` to \`${GITHUB_REF_NAME}\`"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

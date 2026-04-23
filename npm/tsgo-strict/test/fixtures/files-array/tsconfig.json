@@ -1,0 +1,13 @@
+{
+  "compilerOptions": {
+    "strict": false,
+    "noEmit": true,
+    "plugins": [
+      {
+        "name": "typescript-strict-plugin",
+        "paths": ["./src"]
+      }
+    ]
+  },
+  "files": ["src/main.ts"]
+}

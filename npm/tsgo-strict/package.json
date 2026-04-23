@@ -1,0 +1,55 @@
+{
+  "name": "tsgo-strict",
+  "version": "0.1.20",
+  "description": "High-performance strict-only TypeScript checking with tsgo and subset file support",
+  "keywords": [
+    "typescript",
+    "tsgo",
+    "typecheck",
+    "strict",
+    "cli"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ashley-hunter/tsgo-strict.git"
+  },
+  "main": "index.js",
+  "types": "index.d.ts",
+  "bin": {
+    "tsgo-strict": "bin/tsgo-strict"
+  },
+  "scripts": {
+    "postinstall": "node install.js"
+  },
+  "files": [
+    "lib",
+    "bin",
+    "install.js",
+    "index.js",
+    "index.d.ts",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "optionalDependencies": {
+    "@tsgo-strict/linux-x64-gnu": "workspace:*",
+    "@tsgo-strict/linux-x64-musl": "workspace:*",
+    "@tsgo-strict/linux-arm64-gnu": "workspace:*",
+    "@tsgo-strict/darwin-arm64": "workspace:*",
+    "@tsgo-strict/win32-x64-msvc": "workspace:*"
+  },
+  "dependencies": {
+    "detect-libc": "^2.0.3"
+  },
+  "peerDependencies": {
+    "@typescript/native-preview": ">=7.0.0-dev"
+  },
+  "peerDependenciesMeta": {
+    "@typescript/native-preview": {
+      "optional": true
+    }
+  }
+}

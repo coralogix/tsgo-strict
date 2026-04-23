@@ -1,0 +1,7 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "plugins": [{ "name": "typescript-strict-plugin", "paths": ["src"] }]
+  },
+  "include": ["src/**/*.ts"]
+}

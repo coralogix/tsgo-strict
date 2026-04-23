@@ -1,0 +1,194 @@
+/**
+ * tsgo-strict — brand palette + hero polish.
+ *
+ * Base brand: TypeScript blue (#3178c6) gradienting into a hotter "strict-red"
+ * (#e53935) to evoke the "strict mode, opt in file by file" story.
+ */
+
+:root {
+  --vp-c-brand-1: #3178c6;
+  --vp-c-brand-2: #4f8fd1;
+  --vp-c-brand-3: #1f5ea0;
+  --vp-c-brand-soft: rgba(49, 120, 198, 0.14);
+
+  --vp-button-brand-border: transparent;
+  --vp-button-brand-text: #ffffff;
+  --vp-button-brand-bg: var(--vp-c-brand-1);
+  --vp-button-brand-hover-bg: var(--vp-c-brand-2);
+  --vp-button-brand-active-bg: var(--vp-c-brand-3);
+
+  --vp-home-hero-name-color: transparent;
+  --vp-home-hero-name-background: linear-gradient(
+    120deg,
+    #3178c6 0%,
+    #6e56cf 45%,
+    #e53935 100%
+  );
+
+  --vp-home-hero-image-background-image: linear-gradient(
+    -45deg,
+    rgba(49, 120, 198, 0.35) 30%,
+    rgba(229, 57, 53, 0.35) 70%
+  );
+  --vp-home-hero-image-filter: blur(72px);
+
+  --strict-accent-gradient: linear-gradient(
+    120deg,
+    #3178c6 0%,
+    #6e56cf 45%,
+    #e53935 100%
+  );
+
+  --vp-font-family-mono:
+    'JetBrains Mono', 'Fira Code', ui-monospace, SFMono-Regular, Menlo, Monaco,
+    Consolas, 'Liberation Mono', 'Courier New', monospace;
+}
+
+.dark {
+  --vp-c-brand-1: #5fa0dd;
+  --vp-c-brand-2: #7bb3e6;
+  --vp-c-brand-3: #3178c6;
+  --vp-c-brand-soft: rgba(95, 160, 221, 0.16);
+}
+
+/* Hero tightening ---------------------------------------------------------- */
+
+.VPHero .name,
+.VPHero .text {
+  letter-spacing: -0.02em;
+}
+
+.VPHero .tagline {
+  max-width: 32rem;
+  color: var(--vp-c-text-2);
+}
+
+/* Feature cards ------------------------------------------------------------ */
+
+.VPFeature {
+  border-radius: 14px !important;
+  transition:
+    transform 180ms ease,
+    border-color 180ms ease,
+    background-color 180ms ease;
+}
+
+.VPFeature:hover {
+  transform: translateY(-2px);
+  border-color: var(--vp-c-brand-1) !important;
+}
+
+.VPFeature .icon {
+  background: var(--vp-c-brand-soft) !important;
+  border-radius: 10px !important;
+  transition: transform 180ms ease;
+}
+
+.VPFeature:hover .icon {
+  transform: scale(1.05);
+}
+
+/* Custom block polish ------------------------------------------------------ */
+
+.custom-block.tip {
+  border-color: var(--vp-c-brand-1);
+}
+
+/* Stats grid (used on the landing page below the hero) --------------------- */
+
+.tss-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+  margin: 2.5rem 0 1rem;
+}
+
+.tss-stat {
+  padding: 1.25rem 1.5rem;
+  border: 1px solid var(--vp-c-border);
+  border-radius: 14px;
+  background: var(--vp-c-bg-soft);
+  transition: border-color 180ms ease, transform 180ms ease;
+}
+
+.tss-stat:hover {
+  border-color: var(--vp-c-brand-1);
+  transform: translateY(-2px);
+}
+
+.tss-stat .tss-stat-value {
+  font-size: 1.75rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  background: var(--strict-accent-gradient);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  line-height: 1.1;
+}
+
+.tss-stat .tss-stat-label {
+  margin-top: 0.25rem;
+  color: var(--vp-c-text-2);
+  font-size: 0.875rem;
+}
+
+/* Pipeline diagram on how-it-works ---------------------------------------- */
+
+.tss-pipeline {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.75rem;
+  margin: 1.5rem 0;
+  counter-reset: pipeline;
+}
+
+.tss-pipeline .tss-step {
+  position: relative;
+  padding: 1rem 1rem 1rem 2.75rem;
+  border: 1px solid var(--vp-c-border);
+  border-radius: 12px;
+  background: var(--vp-c-bg-soft);
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+.tss-pipeline .tss-step::before {
+  counter-increment: pipeline;
+  content: counter(pipeline);
+  position: absolute;
+  left: 0.9rem;
+  top: 0.9rem;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #fff;
+  background: var(--strict-accent-gradient);
+}
+
+.tss-pipeline .tss-step strong {
+  display: block;
+  margin-bottom: 0.15rem;
+  color: var(--vp-c-text-1);
+}
+
+/* Table polish — benchmarks page ------------------------------------------ */
+
+.vp-doc table {
+  display: table;
+  width: 100%;
+}
+
+.vp-doc table th {
+  background: var(--vp-c-bg-soft);
+}
+
+/* Scrollbar tweak for content -------------------------------------------- */
+
+.vp-doc :not(pre) > code {
+  font-size: 0.875em;
+}

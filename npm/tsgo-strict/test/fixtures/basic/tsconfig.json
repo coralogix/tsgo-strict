@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "node16",
+    "moduleResolution": "node16",
+    "strict": false,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "plugins": [
+      {
+        "name": "typescript-strict-plugin",
+        "paths": ["src/in-scope"]
+      }
+    ]
+  },
+  "include": ["src/**/*"]
+}

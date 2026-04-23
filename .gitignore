@@ -1,0 +1,10 @@
+node_modules
+coverage
+*.log
+
+target
+npm/platforms/*/bin
+npm/platforms/*/native
+
+docs/.vitepress/cache
+docs/.vitepress/dist

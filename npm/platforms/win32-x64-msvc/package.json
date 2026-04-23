@@ -1,0 +1,22 @@
+{
+  "name": "@tsgo-strict/win32-x64-msvc",
+  "version": "0.1.20",
+  "description": "Native tsgo-strict binary for Windows x64 (MSVC)",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ashley-hunter/tsgo-strict.git"
+  },
+  "main": "native/tsgo-strict.node",
+  "files": [
+    "bin/tsgo-strict.exe",
+    "native/tsgo-strict.node",
+    "README.md"
+  ],
+  "os": [
+    "win32"
+  ],
+  "cpu": [
+    "x64"
+  ]
+}
