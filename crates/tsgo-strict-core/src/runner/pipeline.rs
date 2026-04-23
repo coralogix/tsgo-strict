@@ -147,9 +147,11 @@ fn resolve_effective_targets(
         timer.start("reachable-query");
         let reachable = query_reachable_files(binary, &context.project_path, cwd)?;
         timer.end("reachable-query");
+        let reachable_norm: HashSet<String> =
+            reachable.iter().map(|s| s.to_ascii_lowercase()).collect();
         Ok(candidates
             .into_iter()
-            .filter(|f| reachable.contains(&normalize(f)))
+            .filter(|f| reachable_norm.contains(&normalize(f)))
             .collect())
     } else {
         Ok(candidates)

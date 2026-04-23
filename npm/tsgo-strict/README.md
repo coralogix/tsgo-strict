@@ -1,4 +1,4 @@
-# tsgo-strict
+# @coralogix/tsgo-strict
 
 Strict-only TypeScript checking powered by the [`tsgo`](https://www.npmjs.com/package/@typescript/native-preview) native compiler, reading `typescript-strict-plugin`-style config so you can adopt `strict: true` gradually.
 
@@ -7,7 +7,7 @@ Ships a native Rust CLI plus an N-API addon via platform-specific subpackages; n
 ## Install
 
 ```sh
-npm install --save-dev tsgo-strict @typescript/native-preview
+npm install --save-dev @coralogix/tsgo-strict @typescript/native-preview
 ```
 
 The correct native binary and addon for your platform are installed automatically through `optionalDependencies`.
@@ -22,7 +22,7 @@ tsgo-strict src/feature   # run strict check only against this subtree
 ## Programmatic API
 
 ```js
-import { run } from 'tsgo-strict';
+import { run } from '@coralogix/tsgo-strict';
 
 const result = await run({
   project: 'tsconfig.json',

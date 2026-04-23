@@ -1,11 +1,11 @@
 {
-  "name": "@tsgo-strict/linux-x64-musl",
+  "name": "@coralogix/tsgo-strict-linux-x64-musl",
   "version": "0.1.20",
   "description": "Native tsgo-strict binary for Linux x64 (musl)",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/ashley-hunter/tsgo-strict.git"
+    "url": "git+https://github.com/coralogix/internal-tsgo-strict.git"
   },
   "files": [
     "bin/tsgo-strict",
