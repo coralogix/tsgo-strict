@@ -2,6 +2,16 @@
 
 Thanks for contributing to `tsgo-strict`.
 
+## Contributor License Agreement (CLA)
+
+We require that contributors sign our [Contributor License Agreement](CLA.md)
+(CLA) before their first contribution can be merged.
+
+When you open your first pull request, the CLA Assistant bot will comment with a
+link to sign the [Coralogix CLA](https://cla-assistant.io/coralogix/tsgo-strict).
+Signing is a one-time step and takes a moment; once signed, the check turns green
+and your pull request can be reviewed.
+
 ## Development setup
 
 1. Install a recent Rust toolchain (1.75+) — the workspace pins `stable` in `rust-toolchain.toml`.
