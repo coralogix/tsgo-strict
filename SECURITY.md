@@ -1,8 +1,14 @@
-We deeply appreciate any effort to discover and disclose security vulnerabilities responsibly.
+# Security Policy
 
-If you would like to report a vulnerability in one of our products, or have security concerns regarding Coralogix software, please email security@coralogix.com.
+## Reporting a Vulnerability
 
-In order for us to best respond to your report, please include any of the following:
+Please report (suspected) security vulnerabilities to
+**[security@coralogix.com](mailto:security@coralogix.com)**.
+If the issue is confirmed, we will release a patch as soon as possible
+depending on complexity.
+
+To help us respond as quickly as possible, please include any of the
+following:
 
 1. Steps to reproduce or proof-of-concept
 2. Any relevant tools, including versions used
