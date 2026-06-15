@@ -1,7 +1,5 @@
 # tsgo-strict
 
-📖 **Docs:** [tsgo-strict documentation](https://refactored-disco-1qv15pr.pages.github.io/)
-
 `tsgo-strict` is a fast, strict-only TypeScript checker. It wraps Microsoft's
 `tsgo` compiler (`@typescript/native-preview`) and emits only the diagnostics
 you would see if strict mode were turned on for a specific subset of your
@@ -151,4 +149,10 @@ pnpm test:node          # builds the N-API addon + runs Node integration tests
 - [CODE_OF_CONDUCT.md](./CODE_OF_CONDUCT.md)
 - [SECURITY.md](./SECURITY.md)
 - [SUPPORT.md](./SUPPORT.md)
-- [BENCHMARKS.md](./BENCHMARKS.md)
+- [Benchmarks](./docs/benchmarks.md)
+
+## License
+
+Licensed under the [Apache License, Version 2.0](./LICENSE).
+
+Copyright 2026 Coralogix Ltd.
