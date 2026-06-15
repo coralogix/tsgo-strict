@@ -64,6 +64,17 @@ jobs:
       - name: Run Node integration tests
         run: pnpm test:node
 
+  license:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check dependency licenses
+        uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check licenses
+
   docs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
