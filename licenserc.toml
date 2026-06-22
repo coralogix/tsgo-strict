@@ -1,0 +1,34 @@
+# License header configuration for HawkEye.
+# https://github.com/korandoru/hawkeye
+#
+# Run `hawkeye check` to verify headers (CI gate) and `hawkeye format` to
+# insert any that are missing. Only first-party source is covered; test
+# fixtures and the perf-demo corpus are user/third-party code and are excluded.
+
+headerPath = "Apache-2.0.txt"
+
+# Override SLASHSTAR_STYLE to skip a leading shebang (see file for details).
+additionalHeaders = ["licenserc-headers.toml"]
+
+includes = [
+    "crates/**/*.rs",
+    "npm/tsgo-strict/*.js",
+    "npm/tsgo-strict/*.ts",
+    "npm/tsgo-strict/lib/**/*.js",
+    "npm/tsgo-strict/test/*.mjs",
+    "scripts/**/*.mjs",
+]
+
+excludes = [
+    "**/test/fixtures/**",
+    "perf-demo/**",
+]
+
+[properties]
+inceptionYear = 2026
+copyrightOwner = "Coralogix Ltd."
+
+# `.mjs` is not in hawkeye's default mapping; treat it like .js/.ts (block
+# comment style) so our ES-module scripts get the same header.
+[mapping.SLASHSTAR_STYLE]
+extensions = ["mjs"]

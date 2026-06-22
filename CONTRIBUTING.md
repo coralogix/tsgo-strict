@@ -27,6 +27,18 @@ and your pull request can be reviewed.
   into the matching platform package, and runs the Node integration suite.
 - `cargo build --release` — optimized CLI for local benchmarking
 
+### License headers
+
+Every first-party source file must carry the Apache 2.0 header. CI enforces
+this with [HawkEye](https://github.com/korandoru/hawkeye); run it locally with:
+
+- `hawkeye check` — verify all headers are present (what CI runs)
+- `hawkeye format` — insert the header into any file that is missing it
+
+Install once with `cargo install hawkeye`. Configuration lives in
+`licenserc.toml`; test fixtures and the `perf-demo` corpus are intentionally
+excluded.
+
 ## Pull requests
 
 1. Keep PRs focused and small.

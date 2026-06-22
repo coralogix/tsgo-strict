@@ -75,6 +75,17 @@ jobs:
         with:
           command: check licenses
 
+  license-headers:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check Apache license headers
+        uses: korandoru/hawkeye@v6
+        with:
+          args: check
+
   docs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
