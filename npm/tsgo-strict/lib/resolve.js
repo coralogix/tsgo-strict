@@ -30,15 +30,15 @@ function pickPackage() {
 
   if (platform === 'linux' && arch === 'x64') {
     return family === MUSL
-      ? '@cx/tsgo-strict-linux-x64-musl'
-      : '@cx/tsgo-strict-linux-x64-gnu';
+      ? '@coralogix/tsgo-strict-linux-x64-musl'
+      : '@coralogix/tsgo-strict-linux-x64-gnu';
   }
   if (platform === 'linux' && arch === 'arm64') {
     if (family === MUSL) return null;
-    return '@cx/tsgo-strict-linux-arm64-gnu';
+    return '@coralogix/tsgo-strict-linux-arm64-gnu';
   }
-  if (platform === 'darwin' && arch === 'arm64') return '@cx/tsgo-strict-darwin-arm64';
-  if (platform === 'win32' && arch === 'x64') return '@cx/tsgo-strict-win32-x64-msvc';
+  if (platform === 'darwin' && arch === 'arm64') return '@coralogix/tsgo-strict-darwin-arm64';
+  if (platform === 'win32' && arch === 'x64') return '@coralogix/tsgo-strict-win32-x64-msvc';
   return null;
 }
 

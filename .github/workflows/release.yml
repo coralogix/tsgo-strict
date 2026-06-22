@@ -3,15 +3,14 @@ name: Release
 # Manual release. Pick a bump level and the workflow:
 #   1. resolves the next version from the latest `v*` git tag (not from
 #      package.json — the in-repo versions are intentionally stale and
-#      the tag is authoritative, matching @cx/dataprime-parser),
+#      the tag is authoritative, matching @coralogix/dataprime-parser),
 #   2. cross-builds the CLI + N-API addon for all six target triples,
 #   3. stamps the new version into every publishable package.json
 #      ephemerally in CI (rewriting the launcher's `workspace:*`
 #      optionalDeps to concrete pins),
-#   4. publishes each package to JFrog Artifactory
-#      (https://cgx.jfrog.io/artifactory/api/npm/internal.npm.coralogix.net/)
-#      under the `@cx` scope, authenticating via the JFROG_USER / JFROG_PASSWORD
-#      org secrets (the `auth/cx` endpoint returns a ready-to-use `~/.npmrc`),
+#   4. publishes each package to the public npm registry under the
+#      `@coralogix` scope, authenticating via the NPM_TOKEN secret
+#      (an npm automation token with publish rights to the scope),
 #   5. tags the workflow's source commit `vX.Y.Z` and pushes only the tag.
 #
 # Nothing is ever pushed to master. The stamped package.json edits are
@@ -23,7 +22,7 @@ name: Release
 #
 # If the publish step fails, nothing is tagged — the runner simply
 # exits. If the publish succeeded but the tag push fails, the packages
-# are already on JFrog; re-create the tag from the workflow run's SHA.
+# are already on npm; re-create the tag from the workflow run's SHA.
 on:
   workflow_dispatch:
     inputs:
@@ -47,7 +46,7 @@ permissions:
 
 # Only one release may run at a time. Two concurrent dispatches would
 # compute the same `next` version from the same tag, and the second
-# would fail with "version already exists" on JFrog. `cancel-in-progress:
+# would fail with "version already exists" on npm. `cancel-in-progress:
 # false` lets the first run finish rather than killing it partway.
 concurrency:
   group: release
@@ -209,12 +208,14 @@ jobs:
           if-no-files-found: error
 
   publish:
-    name: Publish to JFrog & tag
+    name: Publish to npm & tag
     needs: [prepare, build]
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
       contents: write
+      # Required for `npm publish --provenance` (OIDC-signed provenance).
+      id-token: write
     env:
       VERSION: ${{ needs.prepare.outputs.version }}
       TAG: ${{ needs.prepare.outputs.tag }}
@@ -223,24 +224,13 @@ jobs:
         with:
           fetch-depth: 0
 
+      # `registry-url:` writes the public-npm registry + a `_authToken` line
+      # backed by the NODE_AUTH_TOKEN env var set on the publish steps below.
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 20
-
-      # Fetch a JFrog-scoped auth block and write it to ~/.npmrc. The
-      # returned file contains both the `@cx:registry=...` route and the
-      # credentials npm needs to publish under that scope. No static
-      # token is baked in — only the short-lived reply from the auth
-      # endpoint is persisted.
-      - name: Authenticate to JFrog
-        env:
-          ARTIFACTORY_USERNAME: ${{ secrets.JFROG_USER }}
-          ARTIFACTORY_TOKEN_1: ${{ secrets.JFROG_PASSWORD }}
-        run: |
-          curl --silent --fail -u "${ARTIFACTORY_USERNAME}:${ARTIFACTORY_TOKEN_1}" \
-            https://cgx.jfrog.io/artifactory/api/npm/internal.npm.coralogix.net/auth/cx \
-            | tee ~/.npmrc > /dev/null
+          registry-url: 'https://registry.npmjs.org'
 
       - name: Download all platform artifacts
         uses: actions/download-artifact@v4
@@ -298,34 +288,40 @@ jobs:
           set -euo pipefail
           for d in npm/platforms/*/; do
             echo "::group::dry-run publish ${d}"
-            (cd "$d" && npm publish --dry-run --loglevel=error --always_auth=true --unsafe-perm=true --scope=@cx)
+            (cd "$d" && npm publish --dry-run --loglevel=error --access public)
             echo "::endgroup::"
           done
           echo "::group::dry-run publish npm/tsgo-strict"
-          (cd npm/tsgo-strict && npm publish --dry-run --loglevel=error --always_auth=true --unsafe-perm=true --scope=@cx)
+          (cd npm/tsgo-strict && npm publish --dry-run --loglevel=error --access public)
           echo "::endgroup::"
 
       # Real publish. Platform packages first so the launcher's
       # optionalDependencies resolve on the registry by the time it's
-      # published. Auth is routed through ~/.npmrc written earlier.
+      # published. Auth is the NODE_AUTH_TOKEN written into ~/.npmrc by
+      # setup-node; `--access public` is required because scoped packages
+      # default to restricted.
       - name: Publish platform packages
         if: '!inputs.dry_run'
         shell: bash
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           set -euo pipefail
           for d in npm/platforms/*/; do
             echo "::group::publish ${d}"
-            (cd "$d" && npm publish --loglevel=error --always_auth=true --unsafe-perm=true --scope=@cx)
+            (cd "$d" && npm publish --loglevel=error --access public --provenance)
             echo "::endgroup::"
           done
 
       - name: Publish main package
         if: '!inputs.dry_run'
         shell: bash
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           set -euo pipefail
           cd npm/tsgo-strict
-          npm publish --loglevel=error --always_auth=true --unsafe-perm=true --scope=@cx
+          npm publish --loglevel=error --access public --provenance
 
       # Tag + push only happens after publish succeeds, so a failed
       # publish leaves the remote tag-less. We deliberately do NOT
@@ -367,7 +363,7 @@ jobs:
             if [[ "${{ inputs.dry_run }}" == "true" ]]; then
               echo "- Mode: **dry-run** (no registry writes, no git push)"
             else
-              echo "- Published \`@cx/tsgo-strict@${VERSION}\` and 5 \`@cx/tsgo-strict-*@${VERSION}\` platform packages to JFrog"
+              echo "- Published \`@coralogix/tsgo-strict@${VERSION}\` and 5 \`@coralogix/tsgo-strict-*@${VERSION}\` platform packages to npm"
               echo "- Pushed tag \`${TAG}\` pointing at \`${GITHUB_SHA}\`"
               echo "- Created GitHub Release \`${TAG}\`"
             fi

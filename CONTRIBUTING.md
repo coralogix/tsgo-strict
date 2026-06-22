@@ -51,13 +51,13 @@ excluded.
 
 Releases are cut manually via the **Release** workflow (`workflow_dispatch`
 with a `bump` input of `patch`/`minor`/`major`). The workflow cross-builds
-the CLI + N-API addons, publishes to JFrog under `@cx/tsgo-strict*`, and
-pushes a `vX.Y.Z` tag.
+the CLI + N-API addons, publishes to the public npm registry under
+`@coralogix/tsgo-strict*`, and pushes a `vX.Y.Z` tag.
 
 The in-repo `package.json` `version` fields are **not** the source of
 truth — they're frozen at their initial value and never updated by the
 release workflow. The latest `v*` git tag is authoritative. If you want
-to know what version is currently on JFrog, run
+to know what version is currently published, run
 `git tag --list 'v*' --sort=-v:refname | head -n1`.
 
 ## Reporting bugs and requesting features

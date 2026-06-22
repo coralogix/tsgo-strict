@@ -63,7 +63,7 @@ const addonReady = (() => {
 test('pickPackage returns a supported triple for the current host', () => {
   const id = pickPackage();
   assert.ok(id, 'current platform should be supported');
-  assert.match(id, /^@cx\/tsgo-strict-/);
+  assert.match(id, /^@coralogix\/tsgo-strict-/);
 });
 
 test('full project run reports strict errors only from in-scope paths', { skip: !addonReady }, async () => {

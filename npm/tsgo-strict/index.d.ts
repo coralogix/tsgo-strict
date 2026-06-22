@@ -14,10 +14,10 @@
  * limitations under the License.
  */
 
-// Type definitions for `@cx/tsgo-strict`.
+// Type definitions for `@coralogix/tsgo-strict`.
 //
 // The runtime surface is implemented in `index.js` and backed by a native
-// N-API addon shipped in `@cx/tsgo-strict-<triple>` platform subpackages.
+// N-API addon shipped in `@coralogix/tsgo-strict-<triple>` platform subpackages.
 
 export type Category = 'error' | 'warning' | 'message';
 

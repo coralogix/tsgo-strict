@@ -1,5 +1,5 @@
 {
-  "name": "@cx/tsgo-strict-linux-x64-musl",
+  "name": "@coralogix/tsgo-strict-linux-x64-musl",
   "version": "0.1.0",
   "description": "Native tsgo-strict binary for Linux x64 (musl)",
   "license": "Apache-2.0",
@@ -8,7 +8,7 @@
     "url": "git+https://github.com/coralogix/tsgo-strict.git"
   },
   "publishConfig": {
-    "registry": "https://cgx.jfrog.io/artifactory/api/npm/internal.npm.coralogix.net/"
+    "access": "public"
   },
   "files": [
     "bin/tsgo-strict",
