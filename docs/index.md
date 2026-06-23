@@ -20,7 +20,7 @@ hero:
       link: /guide/introduction
     - theme: alt
       text: View on GitHub
-      link: https://github.com/coralogix/internal-tsgo-strict
+      link: https://github.com/coralogix/tsgo-strict
 
 features:
   - icon: 🎯
@@ -65,9 +65,9 @@ features:
 ## Install
 
 ```bash
-npm install --save-dev @cx/tsgo-strict @typescript/native-preview
+npm install --save-dev @coralogix/tsgo-strict @typescript/native-preview
 # or
-pnpm add -D @cx/tsgo-strict @typescript/native-preview
+pnpm add -D @coralogix/tsgo-strict @typescript/native-preview
 ```
 
 ## Quickstart

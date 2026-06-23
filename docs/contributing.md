@@ -3,10 +3,10 @@
 Contributions are welcome! The full contributor guide lives in the repo
 alongside the code:
 
-- **[CONTRIBUTING.md](https://github.com/coralogix/internal-tsgo-strict/blob/master/CONTRIBUTING.md)** — dev setup, Rust toolchain, running tests, coding style.
-- **[CODE_OF_CONDUCT.md](https://github.com/coralogix/internal-tsgo-strict/blob/master/CODE_OF_CONDUCT.md)** — expectations for how we work together.
-- **[SECURITY.md](https://github.com/coralogix/internal-tsgo-strict/blob/master/SECURITY.md)** — reporting security issues responsibly.
-- **[SUPPORT.md](https://github.com/coralogix/internal-tsgo-strict/blob/master/SUPPORT.md)** — where to ask for help.
+- **[CONTRIBUTING.md](https://github.com/coralogix/tsgo-strict/blob/master/CONTRIBUTING.md)** — dev setup, Rust toolchain, running tests, coding style.
+- **[CODE_OF_CONDUCT.md](https://github.com/coralogix/tsgo-strict/blob/master/CODE_OF_CONDUCT.md)** — expectations for how we work together.
+- **[SECURITY.md](https://github.com/coralogix/tsgo-strict/blob/master/SECURITY.md)** — reporting security issues responsibly.
+- **[SUPPORT.md](https://github.com/coralogix/tsgo-strict/blob/master/SUPPORT.md)** — where to ask for help.
 
 ## Quick dev loop
 
@@ -41,7 +41,7 @@ standalone `.github/workflows/docs.yml` can also be run on demand
 ## Reporting issues
 
 Please file issues on
-[GitHub Issues](https://github.com/coralogix/internal-tsgo-strict/issues)
+[GitHub Issues](https://github.com/coralogix/tsgo-strict/issues)
 with:
 
 - tsgo-strict version

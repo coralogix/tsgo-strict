@@ -1,6 +1,6 @@
 # tsgo-strict
 
-📖 **Docs:** [tsgo-strict documentation](https://refactored-disco-1qv15pr.pages.github.io/)
+📖 **Docs:** [tsgo-strict documentation](https://coralogix.github.io/tsgo-strict/)
 
 `tsgo-strict` is a fast, strict-only TypeScript checker. It wraps Microsoft's
 `tsgo` compiler (`@typescript/native-preview`) and emits only the diagnostics
@@ -90,9 +90,9 @@ export function notYet() { /* forced out */ }
 ## Install
 
 ```bash
-npm install --save-dev @cx/tsgo-strict @typescript/native-preview
+npm install --save-dev @coralogix/tsgo-strict @typescript/native-preview
 # or
-pnpm add -D @cx/tsgo-strict @typescript/native-preview
+pnpm add -D @coralogix/tsgo-strict @typescript/native-preview
 ```
 
 `@typescript/native-preview` is declared as an optional peer dependency — any
@@ -122,7 +122,7 @@ Environment:
 ## Programmatic API
 
 ```js
-import { run } from '@cx/tsgo-strict';
+import { run } from '@coralogix/tsgo-strict';
 
 const result = await run({
   project: 'tsconfig.json',
@@ -151,4 +151,10 @@ pnpm test:node          # builds the N-API addon + runs Node integration tests
 - [CODE_OF_CONDUCT.md](./CODE_OF_CONDUCT.md)
 - [SECURITY.md](./SECURITY.md)
 - [SUPPORT.md](./SUPPORT.md)
-- [BENCHMARKS.md](./BENCHMARKS.md)
+- [Benchmarks](./docs/benchmarks.md)
+
+## License
+
+Licensed under the [Apache License, Version 2.0](./LICENSE).
+
+Copyright 2026 Coralogix Ltd.

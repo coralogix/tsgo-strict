@@ -1,5 +1,5 @@
 {
-  "name": "@cx/tsgo-strict",
+  "name": "@coralogix/tsgo-strict",
   "version": "0.1.0",
   "description": "High-performance strict-only TypeScript checking with tsgo and subset file support",
   "keywords": [
@@ -12,10 +12,10 @@
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/coralogix/internal-tsgo-strict.git"
+    "url": "git+https://github.com/coralogix/tsgo-strict.git"
   },
   "publishConfig": {
-    "registry": "https://cgx.jfrog.io/artifactory/api/npm/internal.npm.coralogix.net/"
+    "access": "public"
   },
   "main": "index.js",
   "types": "index.d.ts",
@@ -38,11 +38,11 @@
     "node": ">=18"
   },
   "optionalDependencies": {
-    "@cx/tsgo-strict-linux-x64-gnu": "workspace:*",
-    "@cx/tsgo-strict-linux-x64-musl": "workspace:*",
-    "@cx/tsgo-strict-linux-arm64-gnu": "workspace:*",
-    "@cx/tsgo-strict-darwin-arm64": "workspace:*",
-    "@cx/tsgo-strict-win32-x64-msvc": "workspace:*"
+    "@coralogix/tsgo-strict-linux-x64-gnu": "workspace:*",
+    "@coralogix/tsgo-strict-linux-x64-musl": "workspace:*",
+    "@coralogix/tsgo-strict-linux-arm64-gnu": "workspace:*",
+    "@coralogix/tsgo-strict-darwin-arm64": "workspace:*",
+    "@coralogix/tsgo-strict-win32-x64-msvc": "workspace:*"
   },
   "dependencies": {
     "detect-libc": "^2.0.3"

@@ -1,6 +1,6 @@
 # Programmatic API
 
-The `@cx/tsgo-strict` npm package exports a single `run()` function that runs
+The `@coralogix/tsgo-strict` npm package exports a single `run()` function that runs
 the strict checker and resolves with structured diagnostics and per-phase
 timings. It's the same code path the CLI uses — the CLI is a thin wrapper
 around `run()`.
@@ -8,7 +8,7 @@ around `run()`.
 ## Quick example
 
 ```ts
-import { run } from '@cx/tsgo-strict';
+import { run } from '@coralogix/tsgo-strict';
 
 const result = await run({
   project: 'tsconfig.json',
@@ -96,7 +96,7 @@ interface RunTiming {
 ### Gate CI with a custom summary
 
 ```ts
-import { run } from '@cx/tsgo-strict';
+import { run } from '@coralogix/tsgo-strict';
 
 const result = await run();
 
@@ -109,7 +109,7 @@ if (result.exitCode === 1) {
 ### Group diagnostics by file for a custom report
 
 ```ts
-import { run } from '@cx/tsgo-strict';
+import { run } from '@coralogix/tsgo-strict';
 
 const { diagnostics } = await run();
 const byFile = new Map<string, typeof diagnostics>();
@@ -129,7 +129,7 @@ for (const [file, items] of byFile) {
 ### Record per-phase timings
 
 ```ts
-import { run } from '@cx/tsgo-strict';
+import { run } from '@coralogix/tsgo-strict';
 
 const { timings } = await run();
 for (const t of timings) {

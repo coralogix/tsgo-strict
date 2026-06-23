@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Build the N-API addon for the current host and stage it into the matching
-# npm/platforms/<triple>/native/ directory so `require('@cx/tsgo-strict')` can
+# npm/platforms/<triple>/native/ directory so `require('@coralogix/tsgo-strict')` can
 # load it in local dev / test runs.
 set -euo pipefail
 

@@ -64,6 +64,29 @@ jobs:
       - name: Run Node integration tests
         run: pnpm test:node
 
+  license:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check dependency licenses
+        uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check licenses
+
+  license-headers:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check Apache license headers
+        uses: korandoru/hawkeye@v6
+        # Defaults to `mode: check` and `config: licenserc.toml`. Do not pass
+        # `args: check` — the action template is `hawkeye <mode> ... <args>`,
+        # so that would invoke `hawkeye check ... check` and error.
+
   docs:
     runs-on: ubuntu-latest
     timeout-minutes: 10

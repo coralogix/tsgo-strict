@@ -1,8 +1,8 @@
 import { defineConfig } from 'vitepress';
 
-const GITHUB = 'https://github.com/coralogix/internal-tsgo-strict';
-const BASE = process.env.DOCS_BASE ?? '/';
-const SITE_URL = process.env.DOCS_SITE_URL ?? `https://refactored-disco-1qv15pr.pages.github.io${BASE}`;
+const GITHUB = 'https://github.com/coralogix/tsgo-strict';
+const BASE = process.env.DOCS_BASE ?? '/tsgo-strict/';
+const SITE_URL = process.env.DOCS_SITE_URL ?? `https://coralogix.github.io${BASE}`;
 const DESCRIPTION =
   'Strict TypeScript. One file at a time. A fast, Rust-powered strict-only type checker built on Microsoft\'s tsgo.';
 

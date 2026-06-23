@@ -2,6 +2,16 @@
 
 Thanks for contributing to `tsgo-strict`.
 
+## Contributor License Agreement (CLA)
+
+We require that contributors sign our [Contributor License Agreement](CLA.md)
+(CLA) before their first contribution can be merged.
+
+When you open your first pull request, the CLA Assistant bot will comment with a
+link to sign the [Coralogix CLA](https://cla-assistant.io/coralogix/tsgo-strict).
+Signing is a one-time step and takes a moment; once signed, the check turns green
+and your pull request can be reviewed.
+
 ## Development setup
 
 1. Install a recent Rust toolchain (1.75+) — the workspace pins `stable` in `rust-toolchain.toml`.
@@ -17,6 +27,18 @@ Thanks for contributing to `tsgo-strict`.
   into the matching platform package, and runs the Node integration suite.
 - `cargo build --release` — optimized CLI for local benchmarking
 
+### License headers
+
+Every first-party source file must carry the Apache 2.0 header. CI enforces
+this with [HawkEye](https://github.com/korandoru/hawkeye); run it locally with:
+
+- `hawkeye check` — verify all headers are present (what CI runs)
+- `hawkeye format` — insert the header into any file that is missing it
+
+Install once with `cargo install hawkeye`. Configuration lives in
+`licenserc.toml`; test fixtures and the `perf-demo` corpus are intentionally
+excluded.
+
 ## Pull requests
 
 1. Keep PRs focused and small.
@@ -29,13 +51,13 @@ Thanks for contributing to `tsgo-strict`.
 
 Releases are cut manually via the **Release** workflow (`workflow_dispatch`
 with a `bump` input of `patch`/`minor`/`major`). The workflow cross-builds
-the CLI + N-API addons, publishes to JFrog under `@cx/tsgo-strict*`, and
-pushes a `vX.Y.Z` tag.
+the CLI + N-API addons, publishes to the public npm registry under
+`@coralogix/tsgo-strict*`, and pushes a `vX.Y.Z` tag.
 
 The in-repo `package.json` `version` fields are **not** the source of
 truth — they're frozen at their initial value and never updated by the
 release workflow. The latest `v*` git tag is authoritative. If you want
-to know what version is currently on JFrog, run
+to know what version is currently published, run
 `git tag --list 'v*' --sort=-v:refname | head -n1`.
 
 ## Reporting bugs and requesting features

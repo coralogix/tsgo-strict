@@ -1,0 +1,46 @@
+# License header configuration for HawkEye.
+# https://github.com/korandoru/hawkeye
+#
+# Run `hawkeye check` to verify headers (CI gate) and `hawkeye format` to
+# insert any that are missing. Only first-party source is covered; test
+# fixtures and the perf-demo corpus are user/third-party code and are excluded.
+
+headerPath = "Apache-2.0.txt"
+
+# Override SLASHSTAR_STYLE to skip a leading shebang (see file for details).
+additionalHeaders = ["licenserc-headers.toml"]
+
+# Include by extension and exclude the non-first-party trees, rather than
+# allow-listing specific directories. This fails safe: a new first-party source
+# file added anywhere is checked automatically, instead of silently going
+# unheadered because nobody updated an allow-list.
+useDefaultExcludes = true
+
+includes = [
+    "**/*.rs",
+    "**/*.ts",
+    "**/*.tsx",
+    "**/*.js",
+    "**/*.mjs",
+    "**/*.cjs",
+]
+
+excludes = [
+    # Test fixtures and the perf-demo corpus are user/third-party sample code.
+    "**/test/fixtures/**",
+    "perf-demo/**",
+    # Dependencies and build artifacts.
+    "**/node_modules/**",
+    "target/**",
+    "**/dist/**",
+    "**/*.d.ts",
+]
+
+[properties]
+inceptionYear = 2026
+copyrightOwner = "Coralogix Ltd."
+
+# `.mjs` is not in hawkeye's default mapping; treat it like .js/.ts (block
+# comment style) so our ES-module scripts get the same header.
+[mapping.SLASHSTAR_STYLE]
+extensions = ["mjs"]
