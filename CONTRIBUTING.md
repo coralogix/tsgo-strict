@@ -30,14 +30,15 @@ and your pull request can be reviewed.
 ### License headers
 
 Every first-party source file must carry the Apache 2.0 header. CI enforces
-this with [HawkEye](https://github.com/korandoru/hawkeye); run it locally with:
+this with a self-contained Node script, `scripts/license-header.mjs` — no extra
+tool to install. The header text lives in `license-header.txt`.
 
-- `hawkeye check` — verify all headers are present (what CI runs)
-- `hawkeye format` — insert the header into any file that is missing it
+- `pnpm license:check` — verify all headers are present (what CI runs)
+- `pnpm license:fix` — insert the header into any file missing it (keeps a
+  leading `#!` shebang on line 1)
 
-Install once with `cargo install hawkeye`. Configuration lives in
-`licenserc.toml`; test fixtures and the `perf-demo` corpus are intentionally
-excluded.
+Test fixtures and the `perf-demo` corpus are user/third-party sample code and
+are excluded.
 
 ## Pull requests
 
