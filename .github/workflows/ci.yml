@@ -83,8 +83,9 @@ jobs:
 
       - name: Check Apache license headers
         uses: korandoru/hawkeye@v6
-        with:
-          args: check
+        # Defaults to `mode: check` and `config: licenserc.toml`. Do not pass
+        # `args: check` — the action template is `hawkeye <mode> ... <args>`,
+        # so that would invoke `hawkeye check ... check` and error.
 
   docs:
     runs-on: ubuntu-latest
