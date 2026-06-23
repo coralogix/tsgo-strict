@@ -16,6 +16,8 @@
     "fmt": "cargo fmt --all",
     "fmt:check": "cargo fmt --all -- --check",
     "lint": "cargo clippy --workspace --all-targets -- -D warnings",
+    "license:check": "node scripts/license-header.mjs check",
+    "license:fix": "node scripts/license-header.mjs fix",
     "perf:generate": "node perf-demo/scripts/generate.mjs",
     "perf:check": "target/release/tsgo-strict --project perf-demo/tsconfig.json",
     "perf:subset": "target/release/tsgo-strict perf-demo/src/batch-00 --project perf-demo/tsconfig.json",
