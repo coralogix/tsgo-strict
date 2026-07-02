@@ -81,7 +81,12 @@ jobs:
           # has never released. The grep filter excludes pre-release tags
           # (e.g. v0.2.0-rc1) that would break the three-segment bump
           # computation below.
-          latest_tag=$(git tag --list 'v*' --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n1)
+          # `grep` exits 1 when no tag matches (e.g. a brand-new repo or a
+          # freshly-scoped one with its release history cleared). Under
+          # `set -euo pipefail` that non-zero would abort the step, so guard
+          # it with `|| true` to let `latest_tag` fall back to empty and the
+          # `current:-0.0.0` default below take over.
+          latest_tag=$(git tag --list 'v*' --sort=-v:refname | { grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' || true; } | head -n1)
           current="${latest_tag#v}"
           current="${current:-0.0.0}"
           bump="${{ inputs.bump }}"
