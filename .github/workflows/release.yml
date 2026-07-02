@@ -9,8 +9,12 @@ name: Release
 #      ephemerally in CI (rewriting the launcher's `workspace:*`
 #      optionalDeps to concrete pins),
 #   4. publishes each package to the public npm registry under the
-#      `@coralogix` scope, authenticating via the NPM_TOKEN secret
-#      (an npm automation token with publish rights to the scope),
+#      `@coralogix` scope via npm Trusted Publishing (OIDC): the job's
+#      `id-token: write` permission lets npm mint a short-lived,
+#      registry-scoped token at publish time, so no long-lived NPM_TOKEN
+#      secret is needed. Each package must have a Trusted Publisher
+#      configured on npmjs.com (repo `coralogix/tsgo-strict`, workflow
+#      `release.yml`) for this to work,
 #   5. tags the workflow's source commit `vX.Y.Z` and pushes only the tag.
 #
 # Nothing is ever pushed to master. The stamped package.json edits are
@@ -224,13 +228,20 @@ jobs:
         with:
           fetch-depth: 0
 
-      # `registry-url:` writes the public-npm registry + a `_authToken` line
-      # backed by the NODE_AUTH_TOKEN env var set on the publish steps below.
+      # `registry-url:` points npm at the public registry. Under Trusted
+      # Publishing there is no `_authToken` to back; npm obtains a
+      # short-lived token via OIDC using the job's `id-token: write`.
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 24
           registry-url: 'https://registry.npmjs.org'
+
+      # Trusted Publishing (OIDC) requires npm >= 11.5.1. Node 24's bundled
+      # npm may be older, so pin a known-good version explicitly.
+      - name: Ensure npm supports trusted publishing
+        shell: bash
+        run: npm install -g npm@^11.5.1
 
       - name: Download all platform artifacts
         uses: actions/download-artifact@v4
@@ -297,14 +308,13 @@ jobs:
 
       # Real publish. Platform packages first so the launcher's
       # optionalDependencies resolve on the registry by the time it's
-      # published. Auth is the NODE_AUTH_TOKEN written into ~/.npmrc by
-      # setup-node; `--access public` is required because scoped packages
-      # default to restricted.
+      # published. Auth is via OIDC Trusted Publishing (no token);
+      # `--access public` is required because scoped packages default to
+      # restricted. `--provenance` is automatic under trusted publishing
+      # but kept explicit for clarity.
       - name: Publish platform packages
         if: '!inputs.dry_run'
         shell: bash
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           set -euo pipefail
           for d in npm/platforms/*/; do
@@ -316,8 +326,6 @@ jobs:
       - name: Publish main package
         if: '!inputs.dry_run'
         shell: bash
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           set -euo pipefail
           cd npm/tsgo-strict
