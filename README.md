@@ -11,6 +11,13 @@ Written in Rust and distributed through per-platform npm packages (the
 `tsgo-strict` launcher plus one prebuilt binary + N-API addon per target,
 resolved via `optionalDependencies`).
 
+> **Drop-in replacement for [`typescript-strict-plugin`](https://github.com/allegro/typescript-strict-plugin).**
+> `tsgo-strict` reads the same `plugins` block from your `tsconfig.json` and honors the same
+> `// @ts-strict-ignore` pragma, so migrating is usually just swapping `tsc-strict` for
+> `tsgo-strict` in your scripts, with no config changes. It replaces the `tsc-strict` CLI
+> checker (not the editor language-service plugin) and runs
+> [~7.7× faster](https://coralogix.github.io/tsgo-strict/benchmarks).
+
 ## What it does
 
 - Reads `typescript-strict-plugin` config from `compilerOptions.plugins`.

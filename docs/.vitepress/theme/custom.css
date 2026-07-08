@@ -1,15 +1,16 @@
 /**
- * tsgo-strict — brand palette + hero polish.
+ * tsgo-strict — Coralogix brand palette + hero polish.
  *
- * Base brand: TypeScript blue (#3178c6) gradienting into a hotter "strict-red"
- * (#e53935) to evoke the "strict mode, opt in file by file" story.
+ * Base brand: Coralogix green (#02763a) gradienting into the bright signal
+ * green (#13e989) from the Coralogix mark, evoking "fast, strict, adopt it
+ * file by file".
  */
 
 :root {
-  --vp-c-brand-1: #3178c6;
-  --vp-c-brand-2: #4f8fd1;
-  --vp-c-brand-3: #1f5ea0;
-  --vp-c-brand-soft: rgba(49, 120, 198, 0.14);
+  --vp-c-brand-1: #02763a;
+  --vp-c-brand-2: #029449;
+  --vp-c-brand-3: #025e2e;
+  --vp-c-brand-soft: rgba(2, 148, 73, 0.14);
 
   --vp-button-brand-border: transparent;
   --vp-button-brand-text: #ffffff;
@@ -20,23 +21,23 @@
   --vp-home-hero-name-color: transparent;
   --vp-home-hero-name-background: linear-gradient(
     120deg,
-    #3178c6 0%,
-    #6e56cf 45%,
-    #e53935 100%
+    #02763a 0%,
+    #16b364 50%,
+    #13e989 100%
   );
 
   --vp-home-hero-image-background-image: linear-gradient(
     -45deg,
-    rgba(49, 120, 198, 0.35) 30%,
-    rgba(229, 57, 53, 0.35) 70%
+    rgba(2, 118, 58, 0.35) 30%,
+    rgba(19, 233, 137, 0.35) 70%
   );
   --vp-home-hero-image-filter: blur(72px);
 
   --strict-accent-gradient: linear-gradient(
     120deg,
-    #3178c6 0%,
-    #6e56cf 45%,
-    #e53935 100%
+    #02763a 0%,
+    #16b364 50%,
+    #13e989 100%
   );
 
   --vp-font-family-mono:
@@ -45,10 +46,24 @@
 }
 
 .dark {
-  --vp-c-brand-1: #5fa0dd;
-  --vp-c-brand-2: #7bb3e6;
-  --vp-c-brand-3: #3178c6;
-  --vp-c-brand-soft: rgba(95, 160, 221, 0.16);
+  --vp-c-brand-1: #2aa968;
+  --vp-c-brand-2: #3cc67e;
+  --vp-c-brand-3: #029449;
+  --vp-c-brand-soft: rgba(60, 198, 126, 0.16);
+
+  --vp-home-hero-name-background: linear-gradient(
+    120deg,
+    #3cc67e 0%,
+    #2aa968 45%,
+    #13e989 100%
+  );
+
+  --strict-accent-gradient: linear-gradient(
+    120deg,
+    #3cc67e 0%,
+    #2aa968 45%,
+    #13e989 100%
+  );
 }
 
 /* Hero tightening ---------------------------------------------------------- */
@@ -191,4 +206,24 @@
 
 .vp-doc :not(pre) > code {
   font-size: 0.875em;
+}
+
+/* Footer Coralogix wordmark — swap by theme (dark type on dark backgrounds) */
+
+.cx-logo {
+  display: inline-block;
+  margin: 12px 0;
+  vertical-align: middle;
+}
+
+.cx-logo--dark {
+  display: none;
+}
+
+.dark .cx-logo--light {
+  display: none;
+}
+
+.dark .cx-logo--dark {
+  display: inline-block;
 }

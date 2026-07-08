@@ -33,8 +33,8 @@ features:
     title: Rust-fast, tsgo-powered
     details: 'Config parsing in under a millisecond and parallel pragma scanning via rayon. <strong>~7.7× faster</strong> end-to-end than <code>typescript-strict-plugin</code> + <code>tsc</code> on a 4,001-file project.'
   - icon: 🔌
-    title: Zero-config plugin block
-    details: 'Reuses <code>typescript-strict-plugin</code>''s config shape in <code>compilerOptions.plugins</code>. No extra config file, no custom runner.'
+    title: Drop-in for typescript-strict-plugin
+    details: 'Reads the same <code>compilerOptions.plugins</code> block and the same <code>// @ts-strict-ignore</code> pragma. Keep your config, swap <code>tsc-strict</code> for <code>tsgo-strict</code>.'
   - icon: 🛠️
     title: CLI + programmatic API
     details: 'Use it from your scripts, your CI, or a Node process via the <code>run()</code> API that returns structured diagnostics and per-phase timings.'
