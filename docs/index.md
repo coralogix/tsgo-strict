@@ -70,7 +70,9 @@ npm install --save-dev @coralogix/tsgo-strict typescript@^7
 pnpm add -D @coralogix/tsgo-strict typescript@^7
 ```
 
-Requires **TypeScript 7 or later** (the native compiler).
+Requires a **native TypeScript compiler** — **TypeScript 7+**, or
+**`@typescript/native-preview`** if your app isn't on v7 yet (install that
+instead and tsgo-strict uses it without touching your app's `typescript`).
 
 ## Quickstart
 

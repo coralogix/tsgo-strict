@@ -10,7 +10,7 @@ Ships a native Rust CLI plus an N-API addon via platform-specific subpackages; n
 npm install --save-dev @coralogix/tsgo-strict typescript@^7
 ```
 
-Requires **TypeScript 7 or later** (the native compiler). The correct `tsgo-strict` native binary and addon for your platform are installed automatically through `optionalDependencies`.
+Requires a **native TypeScript compiler**: either **TypeScript 7 or later** (the `typescript` package) or **`@typescript/native-preview`** if your app stays on TypeScript 5/6 — install that instead and tsgo-strict will use it for strict checking without changing your app's `typescript`. Both are declared as optional peer dependencies. The correct `tsgo-strict` native binary and addon for your platform are installed automatically through `optionalDependencies`.
 
 ## CLI usage
 
