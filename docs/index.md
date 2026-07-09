@@ -65,10 +65,12 @@ features:
 ## Install
 
 ```bash
-npm install --save-dev @coralogix/tsgo-strict @typescript/native-preview
+npm install --save-dev @coralogix/tsgo-strict typescript@^7
 # or
-pnpm add -D @coralogix/tsgo-strict @typescript/native-preview
+pnpm add -D @coralogix/tsgo-strict typescript@^7
 ```
+
+Requires **TypeScript 7 or later** (the native compiler).
 
 ## Quickstart
 

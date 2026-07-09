@@ -139,17 +139,17 @@ test('pragmas override plugin path membership', { skip: !addonReady }, async () 
 
 test('consumer-style scratch project resolves tsgo from a peer dep', { skip: !addonReady }, async () => {
   // Simulate a consumer project that has its own standalone tsconfig + src
-  // tree and depends on `tsgo-strict` + `@typescript/native-preview` as peer
-  // dep. The N-API resolver must walk up from `cwd` and find a usable tsgo.
+  // tree and depends on `tsgo-strict` + `typescript` (v7+) as a peer dep. The
+  // N-API resolver must walk up from `cwd` and find a usable compiler.
   //
-  // We cannot symlink the repo's pnpm-wrapped tsgo into the scratch dir (the
+  // We cannot symlink the repo's pnpm-wrapped tsc into the scratch dir (the
   // wrapper hard-codes pnpm-store paths), so instead we point `TSGO_BINARY`
-  // at the repo's tsgo. That also exercises the env override branch of the
+  // at the repo's tsc. That also exercises the env override branch of the
   // binary resolver.
   const scratch = mkdtempSync(path.join(os.tmpdir(), 'tsgo-strict-peer-'));
   const prevBinary = process.env.TSGO_BINARY;
   try {
-    process.env.TSGO_BINARY = path.join(REPO_ROOT, 'node_modules', '.bin', 'tsgo');
+    process.env.TSGO_BINARY = path.join(REPO_ROOT, 'node_modules', '.bin', 'tsc');
 
     const srcDir = path.join(scratch, 'src');
     mkdirSync(srcDir, { recursive: true });
@@ -274,10 +274,11 @@ test('baseUrl inherited via extends is normalized', { skip: !addonReady }, async
   );
 });
 
-test('nested cwd walks up to the repo node_modules/.bin/tsgo', { skip: !addonReady }, async () => {
+test('nested cwd walks up to the repo TypeScript compiler', { skip: !addonReady }, async () => {
   // Prove the walk-up branch of `resolve_tsgo_binary` works when run from a
   // deep subdirectory — the fixture lives at `npm/tsgo-strict/test/fixtures/
-  // basic/`, four levels below the only `node_modules/.bin/tsgo` in the tree.
+  // basic/`, several levels below the repo's installed `typescript` (v7+)
+  // compiler in the tree.
   const result = await run({ project: path.join(FIXTURE, 'tsconfig.json'), cwd: FIXTURE });
   assert.ok(result.errorCount > 0);
 });

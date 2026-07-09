@@ -2,8 +2,9 @@
 
 📖 **Docs:** [tsgo-strict documentation](https://coralogix.github.io/tsgo-strict/)
 
-`tsgo-strict` is a fast, strict-only TypeScript checker. It wraps Microsoft's
-`tsgo` compiler (`@typescript/native-preview`) and emits only the diagnostics
+`tsgo-strict` is a fast, strict-only TypeScript checker. It drives the native
+TypeScript compiler shipped in **TypeScript 7 or later** (the `typescript`
+package, formerly the `tsgo` native preview) and emits only the diagnostics
 you would see if strict mode were turned on for a specific subset of your
 project — enabling a file-by-file or path-by-path migration to strict.
 
@@ -97,14 +98,15 @@ export function notYet() { /* forced out */ }
 ## Install
 
 ```bash
-npm install --save-dev @coralogix/tsgo-strict @typescript/native-preview
+npm install --save-dev @coralogix/tsgo-strict typescript@^7
 # or
-pnpm add -D @coralogix/tsgo-strict @typescript/native-preview
+pnpm add -D @coralogix/tsgo-strict typescript@^7
 ```
 
-`@typescript/native-preview` is declared as an optional peer dependency — any
-tsgo available on `PATH`, in `node_modules/.bin`, or via the `TSGO_BINARY`
-env var works too.
+`tsgo-strict` requires **TypeScript 7 or later** (the native compiler). It's
+declared as an optional peer dependency, so any compatible `tsc`/`tsgo` binary
+found on `PATH`, in a local install, or via the `TSGO_BINARY` env var works
+too.
 
 ## CLI usage
 

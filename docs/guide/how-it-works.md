@@ -48,13 +48,21 @@ inherited from your base config.
 
 ## Binary resolution
 
-When it needs a `tsgo`, `tsgo-strict` looks — in order — at:
+`tsgo-strict` drives the native TypeScript compiler (TypeScript 7 or later).
+When it needs one, it resolves a binary in this order and uses the first hit:
 
-1. `TSGO_BINARY` environment variable.
-2. `node_modules/.bin/tsgo` (the `@typescript/native-preview` install).
-3. `tsgo` on `PATH`.
+1. The `TSGO_BINARY` environment variable.
+2. A platform-specific native binary from an installed distribution, found by
+   walking up from the working directory:
+   `@typescript/typescript-<platform>-<arch>/lib/tsc` (TypeScript 7+), or
+   `@typescript/native-preview-<platform>-<arch>/lib/tsgo` (the legacy preview).
+3. The `bin` entry of an installed `typescript`, `@typescript/native-preview`,
+   or `tsgo` package.
+4. `tsgo`, then `tsc`, on `PATH`.
 
-The first hit wins.
+It deliberately skips the `node_modules/.bin` wrapper scripts: they add Node
+startup overhead and can fail to resolve the native binary on some Node
+versions.
 
 ## Rust distribution
 

@@ -48,10 +48,10 @@
     "detect-libc": "^2.0.3"
   },
   "peerDependencies": {
-    "@typescript/native-preview": ">=7.0.0-dev"
+    "typescript": ">=7.0.0"
   },
   "peerDependenciesMeta": {
-    "@typescript/native-preview": {
+    "typescript": {
       "optional": true
     }
   }

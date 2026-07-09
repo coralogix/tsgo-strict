@@ -30,7 +30,7 @@ pub enum Error {
     #[error("cannot find extends target '{target}' referenced from {from}")]
     ExtendsNotFound { target: String, from: PathBuf },
 
-    #[error("unable to locate tsgo binary (set TSGO_BINARY, install @typescript/native-preview, or add tsgo to PATH)")]
+    #[error("unable to locate the TypeScript compiler (install typescript@7 or later, set TSGO_BINARY to a tsc/tsgo binary, or add one to PATH)")]
     TsgoNotFound,
 
     #[error("tsgo exited with exit code {exit_code}: {stderr}")]

@@ -6,31 +6,32 @@ This page gets you from zero to a first strict check in about two minutes.
 
 - **Node.js ≥ 18** (for the npm launcher).
 - A project with a `tsconfig.json`.
-- A `tsgo` binary available — install
-  `@typescript/native-preview` (recommended) or set `TSGO_BINARY` to point at
-  an existing binary.
+- **TypeScript 7 or later** (the native compiler) — install the `typescript`
+  package (recommended) or set `TSGO_BINARY` to point at an existing
+  `tsc`/`tsgo` binary.
 
 ## Install
 
 ::: code-group
 
 ```bash [npm]
-npm install --save-dev @coralogix/tsgo-strict @typescript/native-preview
+npm install --save-dev @coralogix/tsgo-strict typescript@^7
 ```
 
 ```bash [pnpm]
-pnpm add -D @coralogix/tsgo-strict @typescript/native-preview
+pnpm add -D @coralogix/tsgo-strict typescript@^7
 ```
 
 ```bash [yarn]
-yarn add -D @coralogix/tsgo-strict @typescript/native-preview
+yarn add -D @coralogix/tsgo-strict typescript@^7
 ```
 
 :::
 
-`@typescript/native-preview` is declared as an **optional peer dependency** —
-any `tsgo` available on `PATH`, in `node_modules/.bin`, or via the
-`TSGO_BINARY` env var works too.
+`typescript` is declared as an **optional peer dependency** — any compatible
+`tsc`/`tsgo` binary available on `PATH`, in a local install, or via the
+`TSGO_BINARY` env var works too. TypeScript 7 is the first release to ship the
+native compiler; earlier (JavaScript-only) versions are not supported.
 
 On install, npm will pick up exactly one of the
 `@coralogix/tsgo-strict-<platform>` subpackages (via `optionalDependencies`) and use

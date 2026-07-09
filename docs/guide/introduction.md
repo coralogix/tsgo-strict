@@ -1,7 +1,8 @@
 # What is tsgo-strict?
 
-`tsgo-strict` is a **fast, strict-only TypeScript checker**. It wraps
-Microsoft's `tsgo` compiler (`@typescript/native-preview`) and emits only the
+`tsgo-strict` is a **fast, strict-only TypeScript checker**. It drives the
+native TypeScript compiler shipped in **TypeScript 7 or later** (the
+`typescript` package, formerly the `tsgo` native preview) and emits only the
 diagnostics you would see if strict mode were turned on for a specific subset
 of your project — enabling a file-by-file or path-by-path migration to
 `strict: true`.

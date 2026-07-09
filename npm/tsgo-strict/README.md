@@ -1,16 +1,16 @@
 # @coralogix/tsgo-strict
 
-Strict-only TypeScript checking powered by the [`tsgo`](https://www.npmjs.com/package/@typescript/native-preview) native compiler, reading `typescript-strict-plugin`-style config so you can adopt `strict: true` gradually.
+Strict-only TypeScript checking powered by the native [`typescript`](https://www.npmjs.com/package/typescript) compiler (**TypeScript 7 or later**), reading `typescript-strict-plugin`-style config so you can adopt `strict: true` gradually.
 
 Ships a native Rust CLI plus an N-API addon via platform-specific subpackages; no Node runtime work on the hot path.
 
 ## Install
 
 ```sh
-npm install --save-dev @coralogix/tsgo-strict @typescript/native-preview
+npm install --save-dev @coralogix/tsgo-strict typescript@^7
 ```
 
-The correct native binary and addon for your platform are installed automatically through `optionalDependencies`.
+Requires **TypeScript 7 or later** (the native compiler). The correct `tsgo-strict` native binary and addon for your platform are installed automatically through `optionalDependencies`.
 
 ## CLI usage
 
