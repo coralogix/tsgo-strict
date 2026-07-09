@@ -291,7 +291,12 @@ fn filter_to_targets(diagnostics: Vec<Diagnostic>, targets: &[Utf8PathBuf]) -> V
 fn check_tsgo_result(result: &TsgoRunResult) -> Result<(), Error> {
     match result.exit_code {
         0 => Ok(()),
-        2 if !result.diagnostics.is_empty() => Ok(()),
+        // The native compiler exits non-zero when it emits type diagnostics:
+        // TypeScript 7's `tsc` uses exit code 1, while the older `tsgo` preview
+        // used 2. Either is a normal "found errors" outcome — as long as we
+        // actually parsed diagnostics out of its output. A non-zero exit with
+        // no diagnostics is a genuine tool/config failure and falls through.
+        1 | 2 if !result.diagnostics.is_empty() => Ok(()),
         code => {
             let stderr = result.stderr.trim();
             let detail = if stderr.is_empty() {
@@ -511,12 +516,20 @@ mod tests {
 
     #[test]
     fn check_tsgo_result_exit_2_with_diagnostics_is_ok() {
+        // Legacy `tsgo` preview convention: exit 2 when type errors are found.
         let r = make_run_result(2, vec![mk(Some("/p/a.ts"), 7006)], "");
         assert!(check_tsgo_result(&r).is_ok());
     }
 
     #[test]
-    fn check_tsgo_result_exit_1_is_err() {
+    fn check_tsgo_result_exit_1_with_diagnostics_is_ok() {
+        // TypeScript 7 `tsc` convention: exit 1 when type errors are found.
+        let r = make_run_result(1, vec![mk(Some("/p/a.ts"), 7006)], "");
+        assert!(check_tsgo_result(&r).is_ok());
+    }
+
+    #[test]
+    fn check_tsgo_result_exit_1_no_diagnostics_is_err() {
         let r = make_run_result(1, vec![], "error TS5090: invalid option\n");
         let err = check_tsgo_result(&r).unwrap_err();
         let msg = err.to_string();

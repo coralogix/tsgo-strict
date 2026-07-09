@@ -6,31 +6,48 @@ This page gets you from zero to a first strict check in about two minutes.
 
 - **Node.js ≥ 18** (for the npm launcher).
 - A project with a `tsconfig.json`.
-- A `tsgo` binary available — install
-  `@typescript/native-preview` (recommended) or set `TSGO_BINARY` to point at
-  an existing binary.
+- **A native TypeScript compiler.** Either:
+  - **TypeScript 7 or later** — the `typescript` package now ships the native
+    compiler (recommended), or
+  - **`@typescript/native-preview`** — for teams whose app stays on TypeScript
+    5/6. It installs the native compiler for strict checking without changing
+    the `typescript` your app builds with.
+
+  Or set `TSGO_BINARY` to point at an existing `tsc`/`tsgo` binary.
 
 ## Install
 
 ::: code-group
 
 ```bash [npm]
-npm install --save-dev @coralogix/tsgo-strict @typescript/native-preview
+npm install --save-dev @coralogix/tsgo-strict typescript@^7
 ```
 
 ```bash [pnpm]
-pnpm add -D @coralogix/tsgo-strict @typescript/native-preview
+pnpm add -D @coralogix/tsgo-strict typescript@^7
 ```
 
 ```bash [yarn]
-yarn add -D @coralogix/tsgo-strict @typescript/native-preview
+yarn add -D @coralogix/tsgo-strict typescript@^7
 ```
 
 :::
 
-`@typescript/native-preview` is declared as an **optional peer dependency** —
-any `tsgo` available on `PATH`, in `node_modules/.bin`, or via the
-`TSGO_BINARY` env var works too.
+`typescript` is declared as an **optional peer dependency** — tsgo-strict only
+needs a *native* compiler, which can come from `typescript@7+`,
+`@typescript/native-preview`, a binary on `PATH`, or the `TSGO_BINARY` env var.
+
+::: tip Not ready to move your app to TypeScript 7?
+You don't have to. Keep your app on its current `typescript` and add the native
+compiler just for strict checking:
+
+```bash
+npm install --save-dev @coralogix/tsgo-strict @typescript/native-preview
+```
+
+tsgo-strict prefers an installed `@typescript/native-preview` over your app's
+`typescript`, so your build is unaffected.
+:::
 
 On install, npm will pick up exactly one of the
 `@coralogix/tsgo-strict-<platform>` subpackages (via `optionalDependencies`) and use

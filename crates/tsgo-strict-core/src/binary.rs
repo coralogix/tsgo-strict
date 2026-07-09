@@ -16,17 +16,36 @@ use crate::errors::Error;
 use camino::Utf8PathBuf;
 use std::path::{Path, PathBuf};
 
-/// Locate the native `tsgo` binary:
+/// Known native TypeScript distributions, in priority order. Each entry is a
+/// `(platform-package base, executable base name)` pair:
+///
+/// * `@typescript/typescript` ships the native compiler as `tsc` (TypeScript 7
+///   and up — the official release channel).
+/// * `@typescript/native-preview` shipped it as `tsgo` (the pre-7 preview
+///   channel), kept here so existing preview installs keep working.
+///
+/// The platform binary lives at `<base>-{platform}-{arch}/lib/<exe>`, matching
+/// the resolution in each package's `lib/getExePath.js`.
+const NATIVE_DISTS: &[(&str, &str)] = &[
+    ("@typescript/typescript", "tsc"),
+    ("@typescript/native-preview", "tsgo"),
+];
+
+/// Locate the native TypeScript compiler binary:
 ///
 /// 1. `TSGO_BINARY` env var (trimmed, non-empty).
-/// 2. Walk up from `cwd` looking for the platform-specific native binary inside
-///    `@typescript/native-preview-{platform}-{arch}/lib/tsgo`.
-/// 3. Walk up from `cwd` checking `node_modules/@typescript/native-preview/`
-///    and `node_modules/tsgo/` for their package.json bin entry.
-/// 4. Fall back to `which tsgo` on PATH.
+/// 2. Walk up from `cwd` looking for a platform-specific native binary shipped
+///    by a known distribution (see [`NATIVE_DISTS`]).
+/// 3. Walk up from `cwd` checking `node_modules/<pkg>` for its package.json bin
+///    entry, for `@typescript/native-preview`, `tsgo`, then `typescript`. The
+///    dedicated native packages are checked first: they are *always* the native
+///    compiler, whereas `typescript` is only native from v7 on. This lets a team
+///    that stays on TypeScript 5/6 for their app install `@typescript/native-preview`
+///    for strict checking and have it win over their ambient `typescript`.
+/// 4. Fall back to `tsgo` then `tsc` on PATH.
 ///
-/// We intentionally skip `node_modules/.bin/tsgo` because it is a Node.js ESM
-/// wrapper script. Spawning it adds Node startup overhead, and on some Node
+/// We intentionally skip `node_modules/.bin/*` because those are Node.js ESM
+/// wrapper scripts. Spawning them adds Node startup overhead, and on some Node
 /// versions the `#getExePath` package import fails entirely.
 pub fn resolve_tsgo_binary(cwd: &Utf8PathBuf) -> Result<Utf8PathBuf, Error> {
     if let Ok(v) = std::env::var("TSGO_BINARY") {
@@ -36,11 +55,15 @@ pub fn resolve_tsgo_binary(cwd: &Utf8PathBuf) -> Result<Utf8PathBuf, Error> {
         }
     }
 
-    if let Some(bin) = find_native_preview_binary(cwd.as_std_path()) {
-        return Ok(Utf8PathBuf::try_from(bin).unwrap());
+    for (base, exe) in NATIVE_DISTS {
+        if let Some(bin) = find_platform_binary(cwd.as_std_path(), base, exe) {
+            if let Ok(utf8) = Utf8PathBuf::try_from(bin) {
+                return Ok(utf8);
+            }
+        }
     }
 
-    for package in ["@typescript/native-preview", "tsgo"] {
+    for package in ["@typescript/native-preview", "tsgo", "typescript"] {
         if let Some(bin) = find_package_bin(cwd.as_std_path(), package) {
             if let Ok(utf8) = Utf8PathBuf::try_from(bin) {
                 return Ok(utf8);
@@ -48,20 +71,24 @@ pub fn resolve_tsgo_binary(cwd: &Utf8PathBuf) -> Result<Utf8PathBuf, Error> {
         }
     }
 
-    match which::which("tsgo") {
-        Ok(p) => Utf8PathBuf::try_from(p).map_err(|e| {
-            Error::msg(format!(
-                "tsgo path on PATH is not valid UTF-8: {}",
-                e.into_path_buf().to_string_lossy()
-            ))
-        }),
-        Err(_) => Err(Error::TsgoNotFound),
+    for cmd in ["tsgo", "tsc"] {
+        if let Ok(p) = which::which(cmd) {
+            return Utf8PathBuf::try_from(p).map_err(|e| {
+                Error::msg(format!(
+                    "{} path on PATH is not valid UTF-8: {}",
+                    cmd,
+                    e.into_path_buf().to_string_lossy()
+                ))
+            });
+        }
     }
+
+    Err(Error::TsgoNotFound)
 }
 
-/// Resolve the platform-specific package name for `@typescript/native-preview`.
-/// Mirrors the logic in `@typescript/native-preview/lib/getExePath.js`.
-fn native_preview_platform_package() -> Option<String> {
+/// The `{platform}-{arch}` suffix used by the native platform packages, e.g.
+/// `darwin-arm64`. Returns `None` on targets none of the distributions ship.
+fn platform_suffix() -> Option<String> {
     let platform = if cfg!(target_os = "linux") {
         "linux"
     } else if cfg!(target_os = "macos") {
@@ -82,28 +109,25 @@ fn native_preview_platform_package() -> Option<String> {
         return None;
     };
 
-    Some(format!("@typescript/native-preview-{}-{}", platform, arch))
+    Some(format!("{}-{}", platform, arch))
 }
 
-fn exe_name() -> &'static str {
+fn exe_file_name(base: &str) -> String {
     if cfg!(windows) {
-        "tsgo.exe"
+        format!("{}.exe", base)
     } else {
-        "tsgo"
+        base.to_string()
     }
 }
 
-/// Walk up from `start` looking for the native tsgo binary inside the
-/// platform-specific `@typescript/native-preview-{platform}-{arch}` package.
-fn find_native_preview_binary(start: &Path) -> Option<PathBuf> {
-    let package = native_preview_platform_package()?;
+/// Walk up from `start` looking for the native binary inside the
+/// platform-specific `<package_base>-{platform}-{arch}` package.
+fn find_platform_binary(start: &Path, package_base: &str, exe_base: &str) -> Option<PathBuf> {
+    let package = format!("{}-{}", package_base, platform_suffix()?);
+    let exe = exe_file_name(exe_base);
     let mut dir: Option<&Path> = Some(start);
     while let Some(d) = dir {
-        let candidate = d
-            .join("node_modules")
-            .join(&package)
-            .join("lib")
-            .join(exe_name());
+        let candidate = d.join("node_modules").join(&package).join("lib").join(&exe);
         if candidate.is_file() {
             return Some(candidate);
         }
@@ -140,8 +164,10 @@ fn extract_bin(pkg: &serde_json::Value) -> Option<String> {
         return Some(s.to_string());
     }
     if let Some(obj) = bin.as_object() {
-        if let Some(s) = obj.get("tsgo").and_then(|v| v.as_str()) {
-            return Some(s.to_string());
+        for key in ["tsgo", "tsc"] {
+            if let Some(s) = obj.get(key).and_then(|v| v.as_str()) {
+                return Some(s.to_string());
+            }
         }
         if let Some((_, v)) = obj.iter().next() {
             return v.as_str().map(|s| s.to_string());
@@ -154,7 +180,13 @@ fn extract_bin(pkg: &serde_json::Value) -> Option<String> {
 mod tests {
     use super::*;
     use std::fs;
+    use std::sync::Mutex;
     use tempfile::TempDir;
+
+    /// Serializes tests that mutate the shared process environment
+    /// (`TSGO_BINARY`), which would otherwise race under the parallel test
+    /// runner.
+    static ENV_LOCK: Mutex<()> = Mutex::new(());
 
     fn touch_exe(path: &Path) {
         if let Some(parent) = path.parent() {
@@ -174,31 +206,100 @@ mod tests {
         fs::write(dir.join("package.json"), pkg.to_string()).unwrap();
     }
 
+    /// Place a fake native binary for the given distribution under `root` and
+    /// return its path, or `None` if the current target isn't shipped.
+    fn install_platform_binary(root: &Path, package_base: &str, exe_base: &str) -> Option<PathBuf> {
+        let suffix = platform_suffix()?;
+        let bin = root
+            .join("node_modules")
+            .join(format!("{package_base}-{suffix}"))
+            .join("lib")
+            .join(exe_file_name(exe_base));
+        touch_exe(&bin);
+        Some(bin)
+    }
+
     #[test]
-    fn find_native_preview_binary_discovers_platform_package() {
+    fn find_platform_binary_discovers_typescript_7_package() {
         let tmp = TempDir::new().unwrap();
         let root = tmp.path();
-        if let Some(pkg) = native_preview_platform_package() {
-            let bin = root
-                .join("node_modules")
-                .join(&pkg)
-                .join("lib")
-                .join(exe_name());
-            touch_exe(&bin);
-
+        if let Some(bin) = install_platform_binary(root, "@typescript/typescript", "tsc") {
             let nested = root.join("packages").join("app").join("src");
             fs::create_dir_all(&nested).unwrap();
 
-            let found =
-                find_native_preview_binary(&nested).expect("native binary should be discovered");
+            let found = find_platform_binary(&nested, "@typescript/typescript", "tsc")
+                .expect("native binary should be discovered");
             assert_eq!(found, bin);
         }
     }
 
     #[test]
-    fn find_native_preview_binary_returns_none_when_absent() {
+    fn find_platform_binary_discovers_native_preview_package() {
         let tmp = TempDir::new().unwrap();
-        assert!(find_native_preview_binary(tmp.path()).is_none());
+        let root = tmp.path();
+        if let Some(bin) = install_platform_binary(root, "@typescript/native-preview", "tsgo") {
+            let found = find_platform_binary(root, "@typescript/native-preview", "tsgo")
+                .expect("native binary should be discovered");
+            assert_eq!(found, bin);
+        }
+    }
+
+    #[test]
+    fn find_platform_binary_returns_none_when_absent() {
+        let tmp = TempDir::new().unwrap();
+        assert!(find_platform_binary(tmp.path(), "@typescript/typescript", "tsc").is_none());
+    }
+
+    #[test]
+    fn resolve_prefers_typescript_7_over_native_preview() {
+        // When both distributions are installed, the official TypeScript 7
+        // package must win.
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path();
+        let _env = ENV_LOCK.lock().unwrap();
+        let (Some(ts), Some(_preview)) = (
+            install_platform_binary(root, "@typescript/typescript", "tsc"),
+            install_platform_binary(root, "@typescript/native-preview", "tsgo"),
+        ) else {
+            return; // target not shipped by the platform packages
+        };
+        let _guard = EnvGuard::remove("TSGO_BINARY");
+
+        let cwd = Utf8PathBuf::from_path_buf(root.to_path_buf()).unwrap();
+        let resolved = resolve_tsgo_binary(&cwd).unwrap();
+        assert_eq!(resolved.as_std_path(), ts);
+    }
+
+    #[test]
+    fn resolve_prefers_native_preview_package_over_ambient_typescript() {
+        // A team stays on TypeScript 5/6 for their app but installs
+        // `@typescript/native-preview` for strict checking. With no platform
+        // binaries present (e.g. pnpm, where they aren't hoisted), the
+        // package-bin step must pick the native preview over the ambient
+        // `typescript` package (which would be the slower JS compiler).
+        let _env = ENV_LOCK.lock().unwrap();
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path();
+
+        let ts_dir = root.join("node_modules").join("typescript");
+        write_pkg(
+            &ts_dir,
+            &serde_json::json!({ "tsc": "bin/tsc", "tsserver": "bin/tsserver" }),
+        );
+        touch_exe(&ts_dir.join("bin").join("tsc"));
+
+        let np_dir = root
+            .join("node_modules")
+            .join("@typescript")
+            .join("native-preview");
+        write_pkg(&np_dir, &serde_json::json!({ "tsgo": "bin/tsgo.js" }));
+        let np_bin = np_dir.join("bin").join("tsgo.js");
+        touch_exe(&np_bin);
+
+        let _guard = EnvGuard::remove("TSGO_BINARY");
+        let cwd = Utf8PathBuf::from_path_buf(root.to_path_buf()).unwrap();
+        let resolved = resolve_tsgo_binary(&cwd).unwrap();
+        assert_eq!(resolved.as_std_path(), np_bin);
     }
 
     #[test]
@@ -237,6 +338,9 @@ mod tests {
         let obj = serde_json::json!({ "bin": { "tsgo": "bin/tsgo.js", "other": "x" } });
         assert_eq!(extract_bin(&obj), Some("bin/tsgo.js".to_string()));
 
+        let tsc = serde_json::json!({ "bin": { "tsc": "bin/tsc", "other": "x" } });
+        assert_eq!(extract_bin(&tsc), Some("bin/tsc".to_string()));
+
         let other = serde_json::json!({ "bin": { "only": "bin/only.js" } });
         assert_eq!(extract_bin(&other), Some("bin/only.js".to_string()));
 
@@ -246,6 +350,7 @@ mod tests {
 
     #[test]
     fn resolve_tsgo_binary_honors_env_override() {
+        let _env = ENV_LOCK.lock().unwrap();
         let tmp = TempDir::new().unwrap();
         let fake = tmp.path().join("my-tsgo");
         touch_exe(&fake);
@@ -265,6 +370,12 @@ mod tests {
         fn set(key: &'static str, value: &str) -> Self {
             let previous = std::env::var(key).ok();
             std::env::set_var(key, value);
+            Self { key, previous }
+        }
+
+        fn remove(key: &'static str) -> Self {
+            let previous = std::env::var(key).ok();
+            std::env::remove_var(key);
             Self { key, previous }
         }
     }

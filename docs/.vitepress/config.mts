@@ -16,7 +16,7 @@ export default defineConfig({
   sitemap: { hostname: SITE_URL },
   head: [
     ['link', { rel: 'icon', type: 'image/svg+xml', href: `${BASE}logo.svg` }],
-    ['meta', { name: 'theme-color', content: '#3178c6' }],
+    ['meta', { name: 'theme-color', content: '#02763a' }],
     ['meta', { property: 'og:type', content: 'website' }],
     ['meta', { property: 'og:title', content: 'tsgo-strict — Strict TypeScript, one file at a time' }],
     ['meta', { property: 'og:description', content: DESCRIPTION }],
@@ -86,7 +86,7 @@ export default defineConfig({
     },
 
     footer: {
-      message: 'Released under the Apache 2.0 License.',
+      message: `<a href="https://coralogix.com" target="_blank" rel="noopener"><img class="cx-logo cx-logo--light" src="${BASE}coralogix-horizontal-light.svg" alt="Coralogix" width="160" /><img class="cx-logo cx-logo--dark" src="${BASE}coralogix-horizontal-dark.svg" alt="Coralogix" width="160" /></a><br />Built and maintained by Coralogix. Released under the Apache 2.0 License.`,
       copyright: `Copyright © ${new Date().getFullYear()} Coralogix`,
     },
 

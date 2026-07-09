@@ -4,8 +4,10 @@
 [`typescript-strict-plugin`](https://github.com/allegro/typescript-strict-plugin):
 flip `"strict": true` on an opted-in subset of files, type-check them, and
 filter the rest. The difference is the engine underneath — `tsgo-strict`
-drives Microsoft's `@typescript/native-preview` (`tsgo`) from a Rust
-coordinator, while `typescript-strict-plugin` shells out to stock `tsc`.
+drives the native TypeScript compiler shipped in TypeScript 7+ (the
+`typescript` package, formerly the `tsgo` native preview) from a Rust
+coordinator, while `typescript-strict-plugin` shells out to the older
+JavaScript `tsc`.
 
 ::: info Methodology
 Hardware: Linux dev container. `perf-demo/` has **4,001 TS files** across
@@ -59,10 +61,10 @@ the 4,001 files in parallel to scan for `// @ts-strict` /
 
 Most of the 7–8× comes from the compiler, not from Rust:
 
-- **`tsc` → `tsgo`.** The `tsgo` native-preview compiler is the bulk of
-  the win. It does the same type-check as `tsc` but in native code with
-  parallel work, so the compile step is several times faster on the same
-  project.
+- **JavaScript `tsc` → native compiler.** The native TypeScript 7 compiler
+  is the bulk of the win. It does the same type-check as the older JavaScript
+  `tsc` but in native code with parallel work, so the compile step is several
+  times faster on the same project.
 - **Config load is free.** `tsgo-strict` parses `tsconfig.json` (plus its
   `extends` chain) in Rust in well under a millisecond. `tsc-strict`
   first shells out to `tsc --showConfig` just to read the plugin block,
