@@ -103,10 +103,12 @@ npm install --save-dev @coralogix/tsgo-strict typescript@^7
 pnpm add -D @coralogix/tsgo-strict typescript@^7
 ```
 
-`tsgo-strict` requires **TypeScript 7 or later** (the native compiler). It's
-declared as an optional peer dependency, so any compatible `tsc`/`tsgo` binary
-found on `PATH`, in a local install, or via the `TSGO_BINARY` env var works
-too.
+`tsgo-strict` needs a **native TypeScript compiler**: either **TypeScript 7 or
+later** (the `typescript` package) or **`@typescript/native-preview`** if your
+app stays on TypeScript 5/6. It's an optional peer dependency, so a compatible
+`tsc`/`tsgo` binary on `PATH`, in a local install, or via the `TSGO_BINARY` env
+var works too. When `@typescript/native-preview` is installed it's preferred
+over your app's `typescript`, so keeping your app on an older version is fine.
 
 ## CLI usage
 

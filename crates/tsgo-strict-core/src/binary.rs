@@ -37,7 +37,11 @@ const NATIVE_DISTS: &[(&str, &str)] = &[
 /// 2. Walk up from `cwd` looking for a platform-specific native binary shipped
 ///    by a known distribution (see [`NATIVE_DISTS`]).
 /// 3. Walk up from `cwd` checking `node_modules/<pkg>` for its package.json bin
-///    entry, for `typescript`, `@typescript/native-preview`, and `tsgo`.
+///    entry, for `@typescript/native-preview`, `tsgo`, then `typescript`. The
+///    dedicated native packages are checked first: they are *always* the native
+///    compiler, whereas `typescript` is only native from v7 on. This lets a team
+///    that stays on TypeScript 5/6 for their app install `@typescript/native-preview`
+///    for strict checking and have it win over their ambient `typescript`.
 /// 4. Fall back to `tsgo` then `tsc` on PATH.
 ///
 /// We intentionally skip `node_modules/.bin/*` because those are Node.js ESM
@@ -59,7 +63,7 @@ pub fn resolve_tsgo_binary(cwd: &Utf8PathBuf) -> Result<Utf8PathBuf, Error> {
         }
     }
 
-    for package in ["typescript", "@typescript/native-preview", "tsgo"] {
+    for package in ["@typescript/native-preview", "tsgo", "typescript"] {
         if let Some(bin) = find_package_bin(cwd.as_std_path(), package) {
             if let Ok(utf8) = Utf8PathBuf::try_from(bin) {
                 return Ok(utf8);
@@ -264,6 +268,38 @@ mod tests {
         let cwd = Utf8PathBuf::from_path_buf(root.to_path_buf()).unwrap();
         let resolved = resolve_tsgo_binary(&cwd).unwrap();
         assert_eq!(resolved.as_std_path(), ts);
+    }
+
+    #[test]
+    fn resolve_prefers_native_preview_package_over_ambient_typescript() {
+        // A team stays on TypeScript 5/6 for their app but installs
+        // `@typescript/native-preview` for strict checking. With no platform
+        // binaries present (e.g. pnpm, where they aren't hoisted), the
+        // package-bin step must pick the native preview over the ambient
+        // `typescript` package (which would be the slower JS compiler).
+        let _env = ENV_LOCK.lock().unwrap();
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path();
+
+        let ts_dir = root.join("node_modules").join("typescript");
+        write_pkg(
+            &ts_dir,
+            &serde_json::json!({ "tsc": "bin/tsc", "tsserver": "bin/tsserver" }),
+        );
+        touch_exe(&ts_dir.join("bin").join("tsc"));
+
+        let np_dir = root
+            .join("node_modules")
+            .join("@typescript")
+            .join("native-preview");
+        write_pkg(&np_dir, &serde_json::json!({ "tsgo": "bin/tsgo.js" }));
+        let np_bin = np_dir.join("bin").join("tsgo.js");
+        touch_exe(&np_bin);
+
+        let _guard = EnvGuard::remove("TSGO_BINARY");
+        let cwd = Utf8PathBuf::from_path_buf(root.to_path_buf()).unwrap();
+        let resolved = resolve_tsgo_binary(&cwd).unwrap();
+        assert_eq!(resolved.as_std_path(), np_bin);
     }
 
     #[test]
