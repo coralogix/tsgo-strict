@@ -418,8 +418,13 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # Stamp the release version into the docs nav. `prepare` already resolved
+      # it from the authoritative git tag, so pass it explicitly rather than
+      # relying on tag discovery inside the build.
       - name: Build docs
         run: pnpm docs:build
+        env:
+          DOCS_VERSION: ${{ needs.prepare.outputs.tag }}
 
       - name: Configure Pages
         uses: actions/configure-pages@v5

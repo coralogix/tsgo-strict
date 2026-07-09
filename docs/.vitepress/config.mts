@@ -1,3 +1,4 @@
+import { execSync } from 'node:child_process';
 import { defineConfig } from 'vitepress';
 
 const GITHUB = 'https://github.com/coralogix/tsgo-strict';
@@ -5,6 +6,33 @@ const BASE = process.env.DOCS_BASE ?? '/tsgo-strict/';
 const SITE_URL = process.env.DOCS_SITE_URL ?? `https://coralogix.github.io${BASE}`;
 const DESCRIPTION =
   'Strict TypeScript. One file at a time. A fast, Rust-powered strict-only type checker built on Microsoft\'s tsgo.';
+
+// Releases are tag-authoritative (see .github/workflows/release.yml) — the
+// in-repo package.json versions are intentionally frozen, so the docs version
+// label must come from the git tag, not from a hardcoded string. The release
+// workflow passes the resolved version via DOCS_VERSION; otherwise we derive it
+// from the latest local `vX.Y.Z` tag so local builds stay in sync too.
+const VERSION = resolveVersion();
+
+function resolveVersion(): string {
+  const raw = process.env.DOCS_VERSION?.trim() || latestGitTag();
+  if (!raw) return 'latest';
+  return raw.startsWith('v') ? raw : `v${raw}`;
+}
+
+function latestGitTag(): string | undefined {
+  try {
+    return execSync("git tag --list 'v*' --sort=-v:refname", {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    })
+      .split('\n')
+      .map((t: string) => t.trim())
+      .find((t: string) => /^v\d+\.\d+\.\d+$/.test(t));
+  } catch {
+    return undefined;
+  }
+}
 
 export default defineConfig({
   title: 'tsgo-strict',
@@ -36,7 +64,7 @@ export default defineConfig({
       { text: 'Reference', link: '/reference/cli', activeMatch: '/reference/' },
       { text: 'Benchmarks', link: '/benchmarks' },
       {
-        text: 'v0.1',
+        text: VERSION,
         items: [
           { text: 'Changelog', link: `${GITHUB}/releases` },
           { text: 'Contributing', link: '/contributing' },
