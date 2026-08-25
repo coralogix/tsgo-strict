@@ -2,6 +2,9 @@ import { execSync } from 'node:child_process';
 import { defineConfig } from 'vitepress';
 
 const GITHUB = 'https://github.com/coralogix/tsgo-strict';
+// Tagged so OSS-driven traffic to coralogix.com is attributable per project.
+const CORALOGIX_URL =
+  'https://coralogix.com/?utm_source=tsgo-strict-docs&utm_medium=oss&utm_campaign=tsgo-strict';
 const BASE = process.env.DOCS_BASE ?? '/tsgo-strict/';
 const SITE_URL = process.env.DOCS_SITE_URL ?? `https://coralogix.github.io${BASE}`;
 const DESCRIPTION =
@@ -45,6 +48,22 @@ export default defineConfig({
   head: [
     ['link', { rel: 'icon', type: 'image/svg+xml', href: `${BASE}logo.svg` }],
     ['meta', { name: 'theme-color', content: '#02763a' }],
+    // Nunito Sans + Inconsolata are the Coralogix design system's families
+    // (tailwind.theme.ts `fontFamily`). Served from Google Fonts rather than
+    // vendored: the design system ships TTFs, which are several hundred kB
+    // heavier than the woff2 the CDN negotiates. Without these the families
+    // named in custom.css silently fall through to the stack defaults.
+    ['link', { rel: 'preconnect', href: 'https://fonts.googleapis.com' }],
+    ['link', { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: '' }],
+    [
+      'link',
+      {
+        rel: 'stylesheet',
+        href:
+          'https://fonts.googleapis.com/css2?family=Nunito+Sans:ital,opsz,wght@0,6..12,400..800;1,6..12,400..800' +
+          '&family=Inconsolata:wght@400..700&display=swap',
+      },
+    ],
     ['meta', { property: 'og:type', content: 'website' }],
     ['meta', { property: 'og:title', content: 'tsgo-strict — Strict TypeScript, one file at a time' }],
     ['meta', { property: 'og:description', content: DESCRIPTION }],
@@ -123,8 +142,14 @@ export default defineConfig({
     },
 
     footer: {
-      message: `<a href="https://coralogix.com" target="_blank" rel="noopener"><img class="cx-logo cx-logo--light" src="${BASE}coralogix-horizontal-light.svg" alt="Coralogix" width="160" /><img class="cx-logo cx-logo--dark" src="${BASE}coralogix-horizontal-dark.svg" alt="Coralogix" width="160" /></a><br />Built and maintained by Coralogix. Released under the Apache 2.0 License.`,
-      copyright: `Copyright © ${new Date().getFullYear()} Coralogix`,
+      message: 'Released under the Apache License 2.0.',
+      copyright: [
+        'Built with 💚 by',
+        `<a href="${CORALOGIX_URL}" target="_blank" rel="noopener">`,
+        `<img src="${BASE}coralogix-mark.svg" alt="" width="14" height="14"` +
+          ' style="display:inline-block;vertical-align:-2px">',
+        'Coralogix</a>',
+      ].join(' '),
     },
 
     editLink: {
