@@ -86,7 +86,10 @@ export default defineConfig({
     ['meta', { name: 'twitter:image', content: `${SITE_URL}og-image.png` }],
   ],
   themeConfig: {
-    logo: { src: '/logo.svg', width: 24, height: 24 },
+    // Coralogix mark, matching galeforce-css. VitePress prefixes `logo` with
+    // `base` itself, unlike the hand-written asset URLs in `head` above.
+    // The tsgo-strict logo stays as the home page hero image.
+    logo: { src: '/coralogix-mark.svg', width: 24, height: 24 },
     siteTitle: 'tsgo-strict',
 
     nav: [
