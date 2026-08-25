@@ -21,6 +21,18 @@
 // `workspace:` protocol, so shipping the manifest as-is would produce an
 // install-time failure for end users.
 //
+// Also stamps `[workspace.package] version` in the root Cargo.toml, which is
+// where `tsgo-strict --version` gets its string from (clap's `version`
+// attribute reads CARGO_PKG_VERSION at compile time). Left unstamped the CLI
+// reports the frozen in-repo 0.1.0 no matter what was published. That means
+// the release workflow has to run this *before* the cargo builds, not just
+// before `npm publish` -- see the `build` job in .github/workflows/release.yml.
+//
+// Cargo.lock is deliberately not rewritten: cargo refreshes the workspace
+// members' entries itself on the next build, and the release builds don't pass
+// `--locked`. If that flag is ever added, the build fails loudly rather than
+// shipping a wrong version.
+//
 // Usage: node scripts/stamp-versions.mjs <version>
 //   e.g. node scripts/stamp-versions.mjs 0.2.0
 
@@ -73,5 +85,31 @@ if (mainPkg.optionalDependencies) {
 }
 writeJson(mainPkgPath, mainPkg);
 
+// Root Cargo.toml: the `version` under `[workspace.package]` only. Scoped to
+// that table so a `version = "..."` in [workspace.dependencies] can never be
+// hit by accident.
+const cargoPath = path.join(repoRoot, 'Cargo.toml');
+const cargoSrc = fs.readFileSync(cargoPath, 'utf8');
+const tableStart = cargoSrc.indexOf('\n[workspace.package]\n');
+if (tableStart === -1) {
+  console.error(`stamp-versions: no [workspace.package] table in ${cargoPath}`);
+  process.exit(1);
+}
+const bodyStart = tableStart + '\n[workspace.package]\n'.length;
+const nextTable = cargoSrc.indexOf('\n[', bodyStart);
+const tableEnd = nextTable === -1 ? cargoSrc.length : nextTable;
+const table = cargoSrc.slice(bodyStart, tableEnd);
+const stampedTable = table.replace(/^version = "[^"]*"$/m, `version = "${version}"`);
+if (stampedTable === table) {
+  console.error(`stamp-versions: no version key under [workspace.package] in ${cargoPath}`);
+  process.exit(1);
+}
+fs.writeFileSync(
+  cargoPath,
+  cargoSrc.slice(0, bodyStart) + stampedTable + cargoSrc.slice(tableEnd),
+  'utf8'
+);
+
 console.log(`stamp-versions: set version ${version} in ${updated.length} package.json file(s):`);
 for (const p of updated) console.log(`  - ${p}`);
+console.log('  - Cargo.toml ([workspace.package] version)');

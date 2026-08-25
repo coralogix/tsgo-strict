@@ -1,5 +1,8 @@
 blank_issues_enabled: false
 contact_links:
+  - name: Documentation
+    url: https://coralogix.github.io/tsgo-strict/
+    about: Guides, configuration reference, pragmas, and migration notes.
   - name: Security issue
     url: https://github.com/coralogix/tsgo-strict/security/advisories/new
     about: Please report vulnerabilities privately.

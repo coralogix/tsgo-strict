@@ -21,9 +21,22 @@ allow = [
     "CDLA-Permissive-2.0",
 ]
 
+[advisories]
+# `cargo deny check advisories` gates known RUSTSEC vulnerabilities on every PR.
+# Anything listed below is a conscious, argued exception, not a way to quiet
+# the gate. Each entry must say why the advisory does not apply to us, and must
+# be re-checked (and deleted when it no longer applies) on every dependency
+# bump.
+ignore = []
+
 [bans]
 multiple-versions = "warn"
 wildcards = "deny"
+# The workspace crates depend on each other by `path` with no version, which
+# cargo-deny counts as a wildcard. That is only a hazard for a crate you
+# publish, and all three carry `publish = false`, so exempt private crates
+# rather than adding version numbers we would then have to keep in sync.
+allow-wildcard-paths = true
 
 [sources]
 unknown-registry = "deny"

@@ -49,11 +49,20 @@ export default defineConfig({
     ['meta', { property: 'og:title', content: 'tsgo-strict — Strict TypeScript, one file at a time' }],
     ['meta', { property: 'og:description', content: DESCRIPTION }],
     ['meta', { property: 'og:url', content: SITE_URL }],
-    ['meta', { property: 'og:image', content: `${SITE_URL}og-image.svg` }],
+    // PNG, not the SVG it was rendered from: no major social platform
+    // (X, Slack, LinkedIn, Facebook, Discord) rasterises SVG for a link
+    // preview, so an SVG here means every shared link shows a blank card.
+    // Regenerate after editing og-image.svg:
+    //   npx @resvg/resvg-js-cli docs/public/og-image.svg -o docs/public/og-image.png --width 1200
+    ['meta', { property: 'og:image', content: `${SITE_URL}og-image.png` }],
+    ['meta', { property: 'og:image:type', content: 'image/png' }],
+    ['meta', { property: 'og:image:width', content: '1200' }],
+    ['meta', { property: 'og:image:height', content: '630' }],
+    ['meta', { property: 'og:image:alt', content: 'tsgo-strict — Strict TypeScript, one file at a time' }],
     ['meta', { name: 'twitter:card', content: 'summary_large_image' }],
     ['meta', { name: 'twitter:title', content: 'tsgo-strict' }],
     ['meta', { name: 'twitter:description', content: DESCRIPTION }],
-    ['meta', { name: 'twitter:image', content: `${SITE_URL}og-image.svg` }],
+    ['meta', { name: 'twitter:image', content: `${SITE_URL}og-image.png` }],
   ],
   themeConfig: {
     logo: { src: '/logo.svg', width: 24, height: 24 },
@@ -68,7 +77,7 @@ export default defineConfig({
         items: [
           { text: 'Changelog', link: `${GITHUB}/releases` },
           { text: 'Contributing', link: '/contributing' },
-          { text: 'npm package', link: 'https://www.npmjs.com/package/tsgo-strict' },
+          { text: 'npm package', link: 'https://www.npmjs.com/package/@coralogix/tsgo-strict' },
         ],
       },
     ],

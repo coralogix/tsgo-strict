@@ -24,7 +24,8 @@ body:
     id: version
     attributes:
       label: tsgo-strict version
-      placeholder: 0.1.0
+      description: Output of `tsgo-strict --version`
+      placeholder: e.g. 0.2.0
     validations:
       required: true
   - type: input

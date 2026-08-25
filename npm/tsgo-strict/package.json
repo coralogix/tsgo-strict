@@ -35,7 +35,7 @@
     "LICENSE"
   ],
   "engines": {
-    "node": ">=18"
+    "node": ">=20"
   },
   "optionalDependencies": {
     "@coralogix/tsgo-strict-linux-x64-gnu": "workspace:*",

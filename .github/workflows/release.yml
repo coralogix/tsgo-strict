@@ -4,8 +4,11 @@ name: Release
 #   1. resolves the next version from the latest `v*` git tag (not from
 #      package.json — the in-repo versions are intentionally stale and
 #      the tag is authoritative, matching @coralogix/dataprime-parser),
-#   2. cross-builds the CLI + N-API addon for all six target triples,
-#   3. stamps the new version into every publishable package.json
+#   2. stamps the version into Cargo.toml, then cross-builds the CLI +
+#      N-API addon for all five target triples. The stamp has to precede
+#      the build: `tsgo-strict --version` is clap reading CARGO_PKG_VERSION,
+#      which is baked in at compile time,
+#   3. stamps the same version into every publishable package.json
 #      ephemerally in CI (rewriting the launcher's `workspace:*`
 #      optionalDeps to concrete pins),
 #   4. publishes each package to the public npm registry under the
@@ -17,9 +20,9 @@ name: Release
 #      `release.yml`) for this to work,
 #   5. tags the workflow's source commit `vX.Y.Z` and pushes only the tag.
 #
-# Nothing is ever pushed to master. The stamped package.json edits are
-# discarded when the runner exits; the in-repo versions stay at their
-# initial value forever. The git tag is the sole source of truth for
+# Nothing is ever pushed to master. The stamped Cargo.toml / package.json
+# edits are discarded when the runner exits; the in-repo versions stay at
+# their initial value forever. The git tag is the sole source of truth for
 # "what have we released". This sidesteps master's branch-protection
 # rules (signed commits + PR-only) without giving the workflow any
 # privileged access.
@@ -159,8 +162,24 @@ jobs:
             addon_src: tsgo_strict_napi.dll
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 30
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
     steps:
       - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      # `tsgo-strict --version` is clap's `version` attribute, which bakes in
+      # CARGO_PKG_VERSION at compile time. So the version has to be stamped
+      # here, before the builds below, not alongside the package.json stamping
+      # in `publish` -- by then the binaries are already built. Without this the
+      # CLI reports the frozen in-repo 0.1.0 forever. Ephemeral: nothing is
+      # committed, same as every other stamp in this workflow.
+      - name: Stamp release version into Cargo.toml
+        shell: bash
+        run: node scripts/stamp-versions.mjs "${VERSION}"
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -284,6 +303,20 @@ jobs:
               chmod 0755 "$f"
               echo "chmod +x $f"
             fi
+          done
+
+      # Apache 2.0 section 4(a) requires a copy of the license to travel with
+      # every distributed copy of the work. npm always includes a LICENSE file
+      # in the tarball regardless of the manifest's `files` list, so staging
+      # one next to each publishable manifest is enough. Ephemeral, like the
+      # version stamping below.
+      - name: Stage LICENSE into each publishable package
+        shell: bash
+        run: |
+          set -euo pipefail
+          for d in npm/platforms/*/ npm/tsgo-strict/; do
+            cp LICENSE "${d}LICENSE"
+            echo "staged ${d}LICENSE"
           done
 
       # Stamp the resolved version into the launcher + all platform

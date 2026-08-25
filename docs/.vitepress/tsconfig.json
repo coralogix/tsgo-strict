@@ -1,0 +1,17 @@
+{
+  // Scoped to the VitePress config + theme sources only. Nothing in CI
+  // typechecks these (VitePress transpiles them with esbuild), but without a
+  // tsconfig an editor resolves neither `node:*` builtins nor the ambient
+  // declaration that makes `import './custom.css'` legal, so the repo opens
+  // full of red squiggles on a fresh clone.
+  "compilerOptions": {
+    "target": "es2022",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "types": ["node", "vitepress/client"],
+    "strict": true,
+    "skipLibCheck": true,
+    "noEmit": true
+  },
+  "include": ["config.mts", "theme/**/*.mts", "theme/**/*.ts"]
+}
