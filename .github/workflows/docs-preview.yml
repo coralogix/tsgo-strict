@@ -105,6 +105,13 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          # The action installs wrangler itself, inferring the package manager
+          # from the lockfile. Left to infer, it picks pnpm and runs
+          # `pnpm add wrangler@4` at the repo root, which is a pnpm workspace
+          # root -- ERR_PNPM_ADDING_TO_ROOT, and the deploy never runs. Pinning
+          # npm sidesteps the guard and keeps wrangler out of our lockfile,
+          # which is the right place for a CI-only tool nobody needs locally.
+          packageManager: npm
           # `--branch` is what makes this a preview rather than a production
           # deployment: any value other than the project's production branch
           # lands on a preview URL, and reusing `pr-<n>` gives each PR a stable
