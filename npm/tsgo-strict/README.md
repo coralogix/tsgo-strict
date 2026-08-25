@@ -38,5 +38,27 @@ Full TypeScript types are shipped with the package.
 
 - linux-x64 (gnu, musl)
 - linux-arm64 (gnu)
-- darwin-x64, darwin-arm64
+- darwin-arm64
 - win32-x64 (msvc)
+
+## Documentation
+
+- [Guide and reference](https://coralogix.github.io/tsgo-strict/)
+- [Configuration](https://coralogix.github.io/tsgo-strict/guide/configuration)
+- [CLI reference](https://coralogix.github.io/tsgo-strict/reference/cli)
+
+## License
+
+Apache License 2.0. Copyright 2026 Coralogix Ltd.
+
+---
+
+<p align="center">
+  Built with 💚 by
+  <a href="https://coralogix.com/?utm_source=npm&amp;utm_medium=oss&amp;utm_campaign=tsgo-strict">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/coralogix/tsgo-strict/master/assets/coralogix-horizontal-white-inline.svg">
+      <img src="https://raw.githubusercontent.com/coralogix/tsgo-strict/master/assets/coralogix-horizontal-black-inline.svg" alt="Coralogix" height="24" align="middle">
+    </picture>
+  </a>
+</p>

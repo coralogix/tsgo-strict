@@ -6,6 +6,9 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 description = "N-API bindings for tsgo-strict's core pipeline"
+# Not published to crates.io: the crate names are unreserved and the public
+# surface is the npm packages. Guards against an accidental `cargo publish`.
+publish = false
 
 [lib]
 crate-type = ["cdylib"]

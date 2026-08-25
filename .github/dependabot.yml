@@ -1,0 +1,49 @@
+version: 2
+
+# CI gates known vulnerabilities via `cargo deny check advisories`, but that is
+# a tripwire: it tells you about a RUSTSEC advisory the next time someone opens
+# an unrelated PR, and then blocks that PR. Dependabot is the other half, so a
+# bump usually lands before the gate ever fires.
+#
+# Grouped so a quiet week produces one PR per ecosystem rather than a dozen.
+# Security updates are deliberately left ungrouped by GitHub and arrive as
+# their own PRs regardless of the schedule below.
+updates:
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      cargo-minor-patch:
+        update-types:
+          - minor
+          - patch
+    commit-message:
+      prefix: 'build(deps)'
+
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      npm-minor-patch:
+        update-types:
+          - minor
+          - patch
+    commit-message:
+      prefix: 'build(deps)'
+
+  # Pinned action versions go stale silently and are a supply-chain surface in
+  # their own right; the release workflow publishes to npm via OIDC.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns:
+          - '*'
+    commit-message:
+      prefix: 'ci(deps)'

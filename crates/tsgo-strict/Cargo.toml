@@ -6,6 +6,9 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 description.workspace = true
+# Not published to crates.io: the crate names are unreserved and the public
+# surface is the npm packages. Guards against an accidental `cargo publish`.
+publish = false
 
 [[bin]]
 name = "tsgo-strict"

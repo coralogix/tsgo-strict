@@ -1,3 +1,13 @@
+<p>
+  Built with 💚 by
+  <a href="https://coralogix.com/?utm_source=github&amp;utm_medium=oss&amp;utm_campaign=tsgo-strict">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/coralogix/tsgo-strict/master/assets/coralogix-horizontal-white-inline.svg">
+      <img src="https://raw.githubusercontent.com/coralogix/tsgo-strict/master/assets/coralogix-horizontal-black-inline.svg" alt="Coralogix" height="24" align="middle">
+    </picture>
+  </a>
+</p>
+
 # tsgo-strict
 
 📖 **Docs:** [tsgo-strict documentation](https://coralogix.github.io/tsgo-strict/)

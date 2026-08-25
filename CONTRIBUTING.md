@@ -14,8 +14,8 @@ and your pull request can be reviewed.
 
 ## Development setup
 
-1. Install a recent Rust toolchain (1.75+) — the workspace pins `stable` in `rust-toolchain.toml`.
-2. Install Node.js 20+ (only needed to exercise the npm launcher and N-API integration tests).
+1. Install a recent Rust toolchain (1.80+, the `rust-version` in `Cargo.toml`) — the workspace pins `stable` in `rust-toolchain.toml`.
+2. Install Node.js 20+ (only needed to exercise the npm launcher and N-API integration tests; CI uses 24).
 3. Install pnpm (`corepack enable` or `npm i -g pnpm`).
 
 ## Local checks
@@ -55,11 +55,17 @@ with a `bump` input of `patch`/`minor`/`major`). The workflow cross-builds
 the CLI + N-API addons, publishes to the public npm registry under
 `@coralogix/tsgo-strict*`, and pushes a `vX.Y.Z` tag.
 
-The in-repo `package.json` `version` fields are **not** the source of
-truth — they're frozen at their initial value and never updated by the
-release workflow. The latest `v*` git tag is authoritative. If you want
-to know what version is currently published, run
-`git tag --list 'v*' --sort=-v:refname | head -n1`.
+The in-repo `package.json` and `Cargo.toml` `version` fields are **not**
+the source of truth — they're frozen at their initial value and never
+updated by the release workflow. The latest `v*` git tag is
+authoritative. If you want to know what version is currently published,
+run `git tag --list 'v*' --sort=-v:refname | head -n1`.
+
+`scripts/stamp-versions.mjs <version>` writes the resolved version into
+both, ephemerally on the CI runner. If you add a new place that reports a
+version to users, stamp it there too — the script exits non-zero when a
+target it expects has gone missing, so a rename fails the release rather
+than silently shipping a stale number.
 
 ## Reporting bugs and requesting features
 

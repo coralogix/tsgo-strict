@@ -3,7 +3,7 @@ name: CI
 on:
   push:
     branches:
-      - main
+      - master
   pull_request:
 
 permissions:
@@ -65,15 +65,23 @@ jobs:
         run: pnpm test:node
 
   license:
+    name: Dependency licenses + advisories
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
-      - name: Check dependency licenses
+      # Runs all four cargo-deny checks against deny.toml:
+      #   licenses   - only the allow-listed SPDX licenses may appear
+      #   advisories - known RUSTSEC vulnerabilities. Exceptions live in the
+      #                `[advisories] ignore` list, each with the reason it does
+      #                not apply to us.
+      #   bans       - no wildcard deps; duplicate versions warn only
+      #   sources    - crates must come from crates.io
+      - name: Check dependency licenses, advisories, bans, and sources
         uses: EmbarkStudios/cargo-deny-action@v2
         with:
-          command: check licenses
+          command: check
 
   license-headers:
     runs-on: ubuntu-latest
