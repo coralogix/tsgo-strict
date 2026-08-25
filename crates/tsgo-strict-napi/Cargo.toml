@@ -17,7 +17,7 @@ crate-type = ["cdylib"]
 tsgo-strict-core = { path = "../tsgo-strict-core" }
 camino.workspace = true
 napi = { version = "2", default-features = false, features = ["napi6", "tokio_rt"] }
-napi-derive = "2"
+napi-derive = "3"
 
 [build-dependencies]
 napi-build = "2"
