@@ -5,10 +5,6 @@
   "description": "Monorepo for tsgo-strict (Rust CLI + npm launcher + per-platform binaries)",
   "license": "Apache-2.0",
   "packageManager": "pnpm@10.10.0",
-  "workspaces": [
-    "npm/tsgo-strict",
-    "npm/platforms/*"
-  ],
   "scripts": {
     "build": "cargo build --release",
     "test": "cargo test --workspace",
