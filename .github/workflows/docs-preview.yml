@@ -102,16 +102,20 @@ jobs:
           steps.creds.outputs.configured == 'true' &&
           github.event.pull_request.head.repo.full_name == github.repository
         uses: cloudflare/wrangler-action@v4
+        # The action installs wrangler itself, with `pnpm add wrangler@4` at
+        # the repo root. That is a pnpm workspace root, so pnpm refuses with
+        # ERR_PNPM_ADDING_TO_ROOT and the deploy never runs. This lifts the
+        # guard for this step only, rather than adding a repo-wide .npmrc for
+        # a CI-only concern.
+        #
+        # Forcing `packageManager: npm` instead does not work: npm then has to
+        # reconcile the node_modules pnpm already created and dies on the
+        # symlink farm.
+        env:
+          npm_config_ignore_workspace_root_check: 'true'
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          # The action installs wrangler itself, inferring the package manager
-          # from the lockfile. Left to infer, it picks pnpm and runs
-          # `pnpm add wrangler@4` at the repo root, which is a pnpm workspace
-          # root -- ERR_PNPM_ADDING_TO_ROOT, and the deploy never runs. Pinning
-          # npm sidesteps the guard and keeps wrangler out of our lockfile,
-          # which is the right place for a CI-only tool nobody needs locally.
-          packageManager: npm
           # `--branch` is what makes this a preview rather than a production
           # deployment: any value other than the project's production branch
           # lands on a preview URL, and reusing `pr-<n>` gives each PR a stable
