@@ -46,7 +46,9 @@ export default defineConfig({
   lastUpdated: true,
   sitemap: { hostname: SITE_URL },
   head: [
-    ['link', { rel: 'icon', type: 'image/svg+xml', href: `${BASE}logo.svg` }],
+    // Coralogix mark, matching galeforce-css. The tsgo-strict logo stays as the
+    // navbar mark; the favicon is the company-level signal.
+    ['link', { rel: 'icon', type: 'image/svg+xml', href: `${BASE}coralogix-mark.svg` }],
     ['meta', { name: 'theme-color', content: '#02763a' }],
     // Nunito Sans + Inconsolata are the Coralogix design system's families
     // (tailwind.theme.ts `fontFamily`). Served from Google Fonts rather than
