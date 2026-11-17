@@ -49,9 +49,13 @@
   },
   "peerDependencies": {
     "typescript": ">=7.0.0",
-    "@typescript/native-preview": ">=7.0.0-dev"
+    "@typescript/native-preview": ">=7.0.0-dev",
+    "tsrs": ">=7.1.0-beta.tsrs1"
   },
   "peerDependenciesMeta": {
+    "tsrs": {
+      "optional": true
+    },
     "typescript": {
       "optional": true
     },

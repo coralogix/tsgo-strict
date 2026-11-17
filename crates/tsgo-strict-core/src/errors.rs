@@ -33,6 +33,14 @@ pub enum Error {
     #[error("unable to locate the TypeScript compiler (install typescript@7 or later, set TSGO_BINARY to a tsc/tsgo binary, or add one to PATH)")]
     TsgoNotFound,
 
+    #[error("unable to locate tsrs (install tsrs, set TSGO_BINARY or TSRS_BINARY to a tsrs binary, or add one to PATH)")]
+    TsrsNotFound,
+
+    #[error(
+        "TypeScript reported configuration errors, so the strict check did not run reliably:\n{0}"
+    )]
+    ConfigDiagnostics(String),
+
     #[error("tsgo exited with exit code {exit_code}: {stderr}")]
     TsgoFailed { exit_code: i32, stderr: String },
 

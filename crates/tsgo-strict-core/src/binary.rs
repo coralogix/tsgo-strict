@@ -13,8 +13,162 @@
 // limitations under the License.
 
 use crate::errors::Error;
+use crate::options::Backend;
 use camino::Utf8PathBuf;
 use std::path::{Path, PathBuf};
+use std::process::Command;
+
+/// A resolved type checker plus the settings every invocation of it needs.
+#[derive(Debug, Clone)]
+pub struct Compiler {
+    pub path: Utf8PathBuf,
+    pub backend: Backend,
+    pub fast: bool,
+}
+
+impl Compiler {
+    /// A command for this compiler with plain, uncolored output and a
+    /// deterministic checker configuration.
+    ///
+    /// `TSRS_FAST` is always removed: tsrs fast mode can change diagnostics,
+    /// and an ambient value (tsrs-lint and oxlint turn it on) must not
+    /// silently alter a strict check. Fast mode is enabled only through
+    /// [`Compiler::fast`], which adds `--fast`.
+    pub fn command(&self) -> Command {
+        let mut cmd = Command::new(self.path.as_std_path());
+        cmd.env("NO_COLOR", "1")
+            .env("FORCE_COLOR", "0")
+            .env_remove("TSRS_FAST");
+        if self.fast {
+            cmd.arg("--fast");
+        }
+        cmd
+    }
+}
+
+/// Resolve the compiler for `backend`. `fast` is a tsrs-only mode.
+///
+/// `Auto` honors an explicit `TSGO_BINARY` first (treated as the native
+/// compiler), then prefers a tsrs install found from `cwd` (`TSRS_BINARY` or
+/// the `tsrs` package), and otherwise falls back to the native compiler. It
+/// never picks up a `tsrs` that is only on PATH, so a global install cannot
+/// switch a project's checker.
+pub fn resolve_compiler(
+    cwd: &Utf8PathBuf,
+    backend: Backend,
+    fast: bool,
+) -> Result<Compiler, Error> {
+    let (path, resolved) = match backend {
+        Backend::Tsc => (resolve_tsgo_binary(cwd)?, Backend::Tsc),
+        Backend::Tsrs => (resolve_tsrs_binary(cwd)?, Backend::Tsrs),
+        Backend::Auto => match env_path("TSGO_BINARY") {
+            Some(p) => (p, Backend::Tsc),
+            None => match find_installed_tsrs(cwd) {
+                Some(p) => (p, Backend::Tsrs),
+                None => (resolve_tsgo_binary(cwd)?, Backend::Tsc),
+            },
+        },
+    };
+    if fast && resolved != Backend::Tsrs {
+        return Err(Error::msg(format!(
+            "fast mode is only available with the tsrs backend, but {} resolved to the native TypeScript compiler ({path})",
+            backend.as_str()
+        )));
+    }
+    Ok(Compiler {
+        path,
+        backend: resolved,
+        fast,
+    })
+}
+
+fn env_path(var: &str) -> Option<Utf8PathBuf> {
+    let v = std::env::var(var).ok()?;
+    let trimmed = v.trim();
+    (!trimmed.is_empty()).then(|| Utf8PathBuf::from(trimmed))
+}
+
+/// A tsrs the project chose: `TSRS_BINARY`, or the `tsrs` package's
+/// platform binary found from `cwd`.
+fn find_installed_tsrs(cwd: &Utf8PathBuf) -> Option<Utf8PathBuf> {
+    env_path("TSRS_BINARY").or_else(|| {
+        find_tsrs_platform_binary(cwd.as_std_path()).and_then(|p| Utf8PathBuf::try_from(p).ok())
+    })
+}
+
+/// Locate the tsrs native binary:
+///
+/// 1. `TSGO_BINARY`, then tsrs's own `TSRS_BINARY` override (trimmed, non-empty).
+/// 2. Walk up from `cwd` to `node_modules/tsrs` and take the platform binary
+///    from the `@tsrs/<platform>` package installed beside it. Resolving
+///    through the real path of `tsrs` covers both a flat `node_modules` and
+///    pnpm's isolated layout, where the platform package is not hoisted.
+/// 3. Fall back to `tsrs` on PATH.
+///
+/// The `tsrs` package's own `bin` is skipped: it is a Node launcher, and the
+/// platform package also carries the `lib.*.d.ts` files the binary needs.
+pub fn resolve_tsrs_binary(cwd: &Utf8PathBuf) -> Result<Utf8PathBuf, Error> {
+    if let Some(p) = env_path("TSGO_BINARY") {
+        return Ok(p);
+    }
+    if let Some(p) = find_installed_tsrs(cwd) {
+        return Ok(p);
+    }
+
+    if let Ok(p) = which::which("tsrs") {
+        return Utf8PathBuf::try_from(p).map_err(|e| {
+            Error::msg(format!(
+                "tsrs path on PATH is not valid UTF-8: {}",
+                e.into_path_buf().to_string_lossy()
+            ))
+        });
+    }
+
+    Err(Error::TsrsNotFound)
+}
+
+/// tsrs platform package names, preferred first. Linux packages carry a libc
+/// suffix; the one matching this build's libc is tried before the other.
+fn tsrs_platform_packages() -> Vec<String> {
+    let Some(suffix) = platform_suffix() else {
+        return Vec::new();
+    };
+    if cfg!(target_os = "linux") {
+        let libcs = if cfg!(target_env = "musl") {
+            ["musl", "gnu"]
+        } else {
+            ["gnu", "musl"]
+        };
+        libcs
+            .iter()
+            .map(|libc| format!("@tsrs/{suffix}-{libc}"))
+            .collect()
+    } else {
+        vec![format!("@tsrs/{suffix}")]
+    }
+}
+
+fn find_tsrs_platform_binary(start: &Path) -> Option<PathBuf> {
+    let packages = tsrs_platform_packages();
+    let exe = exe_file_name("tsrs");
+    let mut dir: Option<&Path> = Some(start);
+    while let Some(d) = dir {
+        let tsrs_pkg = d.join("node_modules").join("tsrs");
+        if tsrs_pkg.join("package.json").is_file() {
+            let real = std::fs::canonicalize(&tsrs_pkg).unwrap_or(tsrs_pkg);
+            if let Some(modules_dir) = real.parent() {
+                for package in &packages {
+                    let candidate = modules_dir.join(package).join(&exe);
+                    if candidate.is_file() {
+                        return Some(candidate);
+                    }
+                }
+            }
+        }
+        dir = d.parent();
+    }
+    None
+}
 
 /// Known native TypeScript distributions, in priority order. Each entry is a
 /// `(platform-package base, executable base name)` pair:
@@ -359,6 +513,158 @@ mod tests {
         let cwd = Utf8PathBuf::from_path_buf(tmp.path().to_path_buf()).unwrap();
         let resolved = resolve_tsgo_binary(&cwd).unwrap();
         assert_eq!(resolved.as_std_path(), fake);
+    }
+
+    /// Lay out `tsrs` the way pnpm does: the package lives in the virtual
+    /// store, with its platform package as a sibling, and only `tsrs` itself
+    /// is linked into the top-level `node_modules`.
+    fn install_tsrs_pnpm_layout(root: &Path) -> Option<PathBuf> {
+        let package = tsrs_platform_packages().into_iter().next()?;
+        let store = root.join("node_modules/.pnpm/tsrs@1.0.0/node_modules");
+        write_pkg(&store.join("tsrs"), &serde_json::json!("bin/tsrs"));
+        let bin = store.join(&package).join(exe_file_name("tsrs"));
+        touch_exe(&bin);
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(store.join("tsrs"), root.join("node_modules/tsrs")).unwrap();
+        #[cfg(not(unix))]
+        return None;
+        Some(fs::canonicalize(bin).unwrap())
+    }
+
+    #[test]
+    fn find_tsrs_platform_binary_follows_pnpm_symlink() {
+        let tmp = TempDir::new().unwrap();
+        if let Some(bin) = install_tsrs_pnpm_layout(tmp.path()) {
+            let nested = tmp.path().join("packages/app");
+            fs::create_dir_all(&nested).unwrap();
+            let found = find_tsrs_platform_binary(&nested).expect("tsrs binary");
+            assert_eq!(fs::canonicalize(found).unwrap(), bin);
+        }
+    }
+
+    #[test]
+    fn find_tsrs_platform_binary_handles_flat_node_modules() {
+        let tmp = TempDir::new().unwrap();
+        let Some(package) = tsrs_platform_packages().into_iter().next() else {
+            return;
+        };
+        let modules = tmp.path().join("node_modules");
+        write_pkg(&modules.join("tsrs"), &serde_json::json!("bin/tsrs"));
+        let bin = modules.join(&package).join(exe_file_name("tsrs"));
+        touch_exe(&bin);
+        let found = find_tsrs_platform_binary(tmp.path()).expect("tsrs binary");
+        assert_eq!(
+            fs::canonicalize(found).unwrap(),
+            fs::canonicalize(bin).unwrap()
+        );
+    }
+
+    #[test]
+    fn find_tsrs_platform_binary_none_without_platform_package() {
+        let tmp = TempDir::new().unwrap();
+        write_pkg(
+            &tmp.path().join("node_modules/tsrs"),
+            &serde_json::json!("bin/tsrs"),
+        );
+        assert_eq!(find_tsrs_platform_binary(tmp.path()), None);
+    }
+
+    #[test]
+    fn resolve_tsrs_binary_honors_overrides_in_order() {
+        let _env = ENV_LOCK.lock().unwrap();
+        let tmp = TempDir::new().unwrap();
+        let cwd = Utf8PathBuf::from_path_buf(tmp.path().to_path_buf()).unwrap();
+
+        let _tsgo = EnvGuard::set("TSGO_BINARY", "/opt/a/tsrs");
+        let _tsrs = EnvGuard::set("TSRS_BINARY", "/opt/b/tsrs");
+        assert_eq!(resolve_tsrs_binary(&cwd).unwrap(), "/opt/a/tsrs");
+
+        let _tsgo = EnvGuard::remove("TSGO_BINARY");
+        assert_eq!(resolve_tsrs_binary(&cwd).unwrap(), "/opt/b/tsrs");
+    }
+
+    #[test]
+    fn resolve_compiler_rejects_fast_when_native_compiler_resolves() {
+        let _env = ENV_LOCK.lock().unwrap();
+        let _tsgo = EnvGuard::set("TSGO_BINARY", "/opt/tsc");
+        let cwd = Utf8PathBuf::from("/tmp");
+        for backend in [Backend::Tsc, Backend::Auto] {
+            let err = resolve_compiler(&cwd, backend, true).unwrap_err();
+            assert!(err.to_string().contains("tsrs backend"), "{err}");
+        }
+    }
+
+    #[test]
+    fn auto_prefers_installed_tsrs_over_native_compiler() {
+        let _env = ENV_LOCK.lock().unwrap();
+        let _tsgo = EnvGuard::remove("TSGO_BINARY");
+        let _tsrs = EnvGuard::remove("TSRS_BINARY");
+        let tmp = TempDir::new().unwrap();
+        install_platform_binary(tmp.path(), "@typescript/typescript", "tsc");
+        let Some(tsrs) = install_tsrs_pnpm_layout(tmp.path()) else {
+            return;
+        };
+        let cwd = Utf8PathBuf::from_path_buf(tmp.path().to_path_buf()).unwrap();
+
+        let auto = resolve_compiler(&cwd, Backend::Auto, true).unwrap();
+        assert_eq!(auto.backend, Backend::Tsrs);
+        assert_eq!(fs::canonicalize(auto.path).unwrap(), tsrs);
+
+        let tsc = resolve_compiler(&cwd, Backend::Tsc, false).unwrap();
+        assert_eq!(tsc.backend, Backend::Tsc);
+    }
+
+    #[test]
+    fn auto_uses_native_compiler_when_tsrs_absent_and_honors_tsgo_binary() {
+        let _env = ENV_LOCK.lock().unwrap();
+        let _tsrs = EnvGuard::remove("TSRS_BINARY");
+        let tmp = TempDir::new().unwrap();
+        let cwd = Utf8PathBuf::from_path_buf(tmp.path().to_path_buf()).unwrap();
+
+        let _tsgo = EnvGuard::remove("TSGO_BINARY");
+        if let Some(tsc) = install_platform_binary(tmp.path(), "@typescript/typescript", "tsc") {
+            let auto = resolve_compiler(&cwd, Backend::Auto, false).unwrap();
+            assert_eq!(
+                (auto.backend, auto.path.as_std_path()),
+                (Backend::Tsc, tsc.as_path())
+            );
+        }
+
+        install_tsrs_pnpm_layout(tmp.path());
+        let _tsgo = EnvGuard::set("TSGO_BINARY", "/opt/explicit");
+        let auto = resolve_compiler(&cwd, Backend::Auto, false).unwrap();
+        assert_eq!(
+            (auto.backend, auto.path.as_str()),
+            (Backend::Tsc, "/opt/explicit")
+        );
+    }
+
+    #[test]
+    fn compiler_command_scrubs_tsrs_fast_and_adds_flag_only_when_opted_in() {
+        let env_of = |cmd: &Command, key: &str| {
+            cmd.get_envs()
+                .find(|(k, _)| *k == key)
+                .map(|(_, v)| v.map(|v| v.to_owned()))
+        };
+        let compiler = Compiler {
+            path: Utf8PathBuf::from("/bin/tsrs"),
+            backend: Backend::Tsrs,
+            fast: false,
+        };
+        let cmd = compiler.command();
+        assert_eq!(
+            env_of(&cmd, "TSRS_FAST"),
+            Some(None),
+            "TSRS_FAST must be removed"
+        );
+        assert_eq!(cmd.get_args().count(), 0);
+
+        let fast = Compiler {
+            fast: true,
+            ..compiler
+        };
+        let args: Vec<_> = fast.command().get_args().map(|a| a.to_owned()).collect();
+        assert_eq!(args, vec!["--fast"]);
     }
 
     struct EnvGuard {

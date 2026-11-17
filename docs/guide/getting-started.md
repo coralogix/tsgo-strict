@@ -49,6 +49,18 @@ tsgo-strict prefers an installed `@typescript/native-preview` over your app's
 `typescript`, so your build is unaffected.
 :::
 
+::: tip Faster checks with tsrs
+Install [tsrs](https://github.com/oxc-project/tsrs) alongside and tsgo-strict
+uses it automatically:
+
+```bash
+npm install --save-dev tsrs
+```
+
+Pass `--backend tsc` to go back to the native TypeScript compiler. See
+[Backends](/guide/how-it-works#backends).
+:::
+
 On install, npm will pick up exactly one of the
 `@coralogix/tsgo-strict-<platform>` subpackages (via `optionalDependencies`) and use
 its prebuilt native binary. No compile step runs on your machine.

@@ -46,10 +46,41 @@ surface as new errors on code that was clean under v5. See
 for the list. Everything else (module, target, jsx, paths, lib, …) is
 inherited from your base config.
 
+## Backends
+
+`tsgo-strict` can drive two type checkers, chosen with `--backend` (or the
+`backend` API option, or `TSGO_STRICT_BACKEND`):
+
+- **`tsc`**: the native TypeScript compiler, TypeScript 7 or later.
+- **`tsrs`**: [tsrs](https://github.com/oxc-project/tsrs), a Rust port of the
+  TypeScript 7 compiler that aims for identical diagnostics with less time and
+  memory. Install it with `npm install --save-dev tsrs`.
+
+The default, **`auto`**, uses tsrs when the project installs it (or
+`TSRS_BINARY` is set) and the native compiler otherwise. A `tsrs` that is only
+on `PATH` is not picked up automatically.
+
+tsrs runs in its default mode, which follows the pinned TypeScript checker. Its
+fast mode is used only with `--fast`: it can change diagnostics in rare cases,
+so tsgo-strict also removes an ambient `TSRS_FAST` from the environment it
+passes to tsrs.
+
+tsrs targets a specific TypeScript release (see `tsrs --version`). Keep it in
+step with the TypeScript version your editor and build use, or their
+diagnostics can differ.
+
+### tsrs resolution
+
+1. `TSGO_BINARY`, then `TSRS_BINARY`.
+2. The platform binary of an installed `tsrs` package
+   (`@tsrs/<platform>-<arch>[-gnu|-musl]/tsrs`), found by walking up from the
+   working directory. It works with flat and pnpm `node_modules` layouts.
+3. `tsrs` on `PATH` (with `--backend tsrs` only).
+
 ## Binary resolution
 
-`tsgo-strict` drives the native TypeScript compiler (TypeScript 7 or later).
-When it needs one, it resolves a binary in this order and uses the first hit:
+For the `tsc` backend, `tsgo-strict` resolves the native TypeScript compiler
+in this order and uses the first hit:
 
 1. The `TSGO_BINARY` environment variable.
 2. A platform-specific native binary from an installed distribution, found by

@@ -43,3 +43,10 @@ if (exitCode === 2) {
 - The plugin block in `compilerOptions.plugins` is malformed JSON or has
   the wrong shape.
 - An `excludePattern` glob is invalid.
+- TypeScript reported an error against a tsconfig, or one with no file
+  (for example TS5069 or TS6059). Such errors can stop TypeScript from
+  type-checking at all, so tsgo-strict fails rather than report a clean run.
+  The exception is TS5023 ("Unknown compiler option"), which does not stop
+  checking and which TypeScript 7 reports for every option it removed.
+- `--fast` was passed but tsrs is not the resolved backend, or
+  `TSGO_STRICT_BACKEND` holds an unknown value.

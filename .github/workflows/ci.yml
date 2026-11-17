@@ -39,6 +39,10 @@ jobs:
   node:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        backend: [tsc, tsrs]
     steps:
       - uses: actions/checkout@v4
 
@@ -58,11 +62,13 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
 
-      - name: Install workspace deps (for @typescript/native-preview + detect-libc)
+      - name: Install workspace deps (for typescript, tsrs + detect-libc)
         run: pnpm install --frozen-lockfile
 
       - name: Run Node integration tests
         run: pnpm test:node
+        env:
+          TSGO_STRICT_BACKEND: ${{ matrix.backend }}
 
   license:
     name: Dependency licenses + advisories

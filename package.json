@@ -26,6 +26,7 @@
   },
   "devDependencies": {
     "@types/node": "^26.3.0",
+    "tsrs": "7.1.0-beta.tsrs2",
     "typescript": "^7.0.0",
     "vitepress": "^1.6.4"
   }

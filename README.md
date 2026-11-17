@@ -120,6 +120,10 @@ app stays on TypeScript 5/6. It's an optional peer dependency, so a compatible
 var works too. When `@typescript/native-preview` is installed it's preferred
 over your app's `typescript`, so keeping your app on an older version is fine.
 
+If [`tsrs`](https://github.com/oxc-project/tsrs), the Rust port of the
+TypeScript 7 compiler, is installed, `tsgo-strict` uses it instead. Pass
+`--backend tsc` to keep the native compiler.
+
 ## CLI usage
 
 ```bash
@@ -129,16 +133,20 @@ tsgo-strict [fileOrGlob ...]
 Options:
 
 - `-p, --project <path>` — tsconfig path (default `tsconfig.json`)
+- `--backend <auto|tsc|tsrs>` — type checker (default `auto`: tsrs when installed, else tsc)
+- `--fast` — tsrs fast mode; faster, but may change diagnostics in rare cases
 
 Exit codes:
 
 - `0` — no strict diagnostics
 - `1` — strict diagnostics found
-- `2` — tool/config/runtime error
+- `2` — tool/config/runtime error, including tsconfig errors that stop TypeScript from type-checking
 
 Environment:
 
-- `TSGO_BINARY` — explicit path to a `tsgo` binary (highest-priority resolver)
+- `TSGO_BINARY` — explicit path to a compiler binary (highest-priority resolver)
+- `TSGO_STRICT_BACKEND` — default for `--backend`
+- `TSRS_BINARY` — explicit path to a tsrs binary (`auto` and `tsrs` backends)
 
 ## Programmatic API
 
@@ -153,7 +161,7 @@ const result = await run({
 console.log(result.errorCount, result.diagnostics);
 ```
 
-Returns `{ errorCount, exitCode, diagnostics[], timings[] }`. Full type
+Returns `{ errorCount, exitCode, diagnostics[], timings[], backend }`. Full type
 definitions ship with the package.
 
 ## Development
