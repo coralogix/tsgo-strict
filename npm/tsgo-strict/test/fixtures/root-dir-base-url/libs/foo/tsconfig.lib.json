@@ -1,0 +1,9 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "../../dist/out-tsc",
+    "declaration": true,
+    "plugins": [{ "name": "typescript-strict-plugin" }]
+  },
+  "include": ["src/**/*.ts"]
+}
