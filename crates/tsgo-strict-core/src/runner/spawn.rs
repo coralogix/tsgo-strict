@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::binary::Compiler;
 use crate::diagnostics::Diagnostic;
 use crate::errors::Error;
 use crate::runner::parse::parse_diagnostics;
 use crate::runner::temp_config::{write_temp_config, TempConfig};
 use camino::Utf8PathBuf;
-use std::process::Command;
 use std::time::Instant;
 
 #[derive(Debug, Clone)]
@@ -34,7 +34,7 @@ pub struct RunInput<'a> {
     pub project_path: &'a Utf8PathBuf,
     pub raw_config: &'a serde_json::Value,
     pub files: &'a [Utf8PathBuf],
-    pub binary: &'a Utf8PathBuf,
+    pub compiler: &'a Compiler,
     /// When set, the temp config will inline all compilerOptions (without
     /// `extends`) and rewrite paths to compensate for the removed `baseUrl`.
     pub effective_base_url: Option<&'a Utf8PathBuf>,
@@ -66,15 +66,16 @@ pub fn run_tsgo(input: RunInput<'_>) -> Result<TsgoRunResult, Error> {
     // no code-frame snippets, no "Found N errors in M files" summary block.
     // Pretty output would be mis-parsed as continuation text of the preceding
     // diagnostic, corrupting the final report.
-    let mut cmd = Command::new(input.binary.as_std_path());
+    let mut cmd = input.compiler.command();
     cmd.args(["--noEmit", "--pretty", "false", "-p", temp.path.as_str()])
-        .current_dir(input.cwd.as_std_path())
-        .env("NO_COLOR", "1")
-        .env("FORCE_COLOR", "0");
+        .current_dir(input.cwd.as_std_path());
 
-    let output = cmd
-        .output()
-        .map_err(|e| Error::msg(format!("failed to spawn tsgo ({}): {}", input.binary, e)))?;
+    let output = cmd.output().map_err(|e| {
+        Error::msg(format!(
+            "failed to spawn tsgo ({}): {}",
+            input.compiler.path, e
+        ))
+    })?;
 
     let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
     let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
@@ -99,11 +100,12 @@ pub fn run_tsgo(input: RunInput<'_>) -> Result<TsgoRunResult, Error> {
 /// case-duplicate entries (TS1149) on case-insensitive filesystems. Callers
 /// that need a containment set should build a lowercased set themselves.
 pub fn query_reachable_files(
-    binary: &Utf8PathBuf,
+    compiler: &Compiler,
     project_path: &Utf8PathBuf,
     cwd: &Utf8PathBuf,
 ) -> Result<Vec<String>, Error> {
-    let output = Command::new(binary.as_std_path())
+    let output = compiler
+        .command()
         .args([
             "--listFilesOnly",
             "--pretty",
@@ -112,13 +114,11 @@ pub fn query_reachable_files(
             project_path.as_str(),
         ])
         .current_dir(cwd.as_std_path())
-        .env("NO_COLOR", "1")
-        .env("FORCE_COLOR", "0")
         .output()
         .map_err(|e| {
             Error::msg(format!(
                 "failed to spawn tsgo --listFilesOnly ({}): {}",
-                binary, e
+                compiler.path, e
             ))
         })?;
 

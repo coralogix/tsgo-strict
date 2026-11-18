@@ -26,7 +26,7 @@ use napi::bindgen_prelude::*;
 use napi::tokio::task;
 use napi_derive::napi;
 use tsgo_strict_core::diagnostics::Category;
-use tsgo_strict_core::options::CliOptions;
+use tsgo_strict_core::options::{Backend, CliOptions};
 use tsgo_strict_core::{list_files as core_list_files, run_structured};
 
 #[napi(object)]
@@ -41,6 +41,11 @@ pub struct RunOptions {
     pub subset: Option<Vec<String>>,
     /// When true, resolve the file list and return it without type-checking.
     pub list_files: Option<bool>,
+    /// `"auto"` (tsrs when installed, else tsc), `"tsc"` or `"tsrs"`.
+    /// Defaults to `TSGO_STRICT_BACKEND`, then `"auto"`.
+    pub backend: Option<String>,
+    /// Enable tsrs fast mode. Rejected unless tsrs is the resolved backend.
+    pub fast: Option<bool>,
 }
 
 #[napi(object)]
@@ -67,12 +72,14 @@ pub struct RunResult {
     pub timings: Vec<RunTiming>,
     /// Populated when `list_files` is set. Contains the resolved file paths.
     pub files: Option<Vec<String>>,
+    /// The type checker that ran: `"tsc"` or `"tsrs"`. Absent for `list_files`.
+    pub backend: Option<String>,
 }
 
 #[napi]
 pub async fn run(options: RunOptions) -> Result<RunResult> {
     let do_list_files = options.list_files.unwrap_or(false);
-    let cli = build_cli_options(options);
+    let cli = build_cli_options(options)?;
 
     if do_list_files {
         let files = task::spawn_blocking(move || core_list_files(&cli))
@@ -86,6 +93,7 @@ pub async fn run(options: RunOptions) -> Result<RunResult> {
             diagnostics: Vec::new(),
             timings: Vec::new(),
             files: Some(files.into_iter().map(|p| p.to_string()).collect()),
+            backend: None,
         });
     }
 
@@ -130,10 +138,18 @@ pub async fn run(options: RunOptions) -> Result<RunResult> {
         diagnostics,
         timings,
         files: None,
+        backend: Some(outcome.backend.as_str().to_string()),
     })
 }
 
-fn build_cli_options(opts: RunOptions) -> CliOptions {
+fn build_cli_options(opts: RunOptions) -> Result<CliOptions> {
+    let backend = opts
+        .backend
+        .as_deref()
+        .map(str::parse::<Backend>)
+        .transpose()
+        .map_err(napi_err)?;
+
     let cwd = match opts.cwd {
         Some(p) => Utf8PathBuf::from(p),
         None => Utf8PathBuf::from(
@@ -143,13 +159,15 @@ fn build_cli_options(opts: RunOptions) -> CliOptions {
         ),
     };
 
-    CliOptions {
+    Ok(CliOptions {
         project: opts.project.unwrap_or_else(|| "tsconfig.json".to_string()),
         cwd,
         subset_inputs: opts.subset.unwrap_or_default(),
         list_files: opts.list_files.unwrap_or(false),
         timing: false,
-    }
+        backend,
+        fast: opts.fast.unwrap_or(false),
+    })
 }
 
 fn napi_err<E: std::fmt::Display>(e: E) -> napi::Error {
@@ -166,12 +184,14 @@ mod tests {
             cwd: Some("/tmp/proj".to_string()),
             subset: None,
             list_files: None,
+            backend: None,
+            fast: None,
         }
     }
 
     #[test]
     fn defaults_applied_when_options_are_empty() {
-        let cli = build_cli_options(base_options());
+        let cli = build_cli_options(base_options()).unwrap();
         assert_eq!(cli.project, "tsconfig.json");
         assert_eq!(cli.cwd.as_str(), "/tmp/proj");
         assert!(cli.subset_inputs.is_empty());
@@ -181,7 +201,7 @@ mod tests {
     fn subset_inputs_are_forwarded_verbatim() {
         let mut opts = base_options();
         opts.subset = Some(vec!["src/a".into(), "src/b.ts".into()]);
-        let cli = build_cli_options(opts);
+        let cli = build_cli_options(opts).unwrap();
         assert_eq!(cli.subset_inputs, vec!["src/a", "src/b.ts"]);
     }
 
@@ -189,7 +209,26 @@ mod tests {
     fn custom_project_is_forwarded() {
         let mut opts = base_options();
         opts.project = Some("packages/app/tsconfig.json".into());
-        let cli = build_cli_options(opts);
+        let cli = build_cli_options(opts).unwrap();
         assert_eq!(cli.project, "packages/app/tsconfig.json");
+    }
+
+    #[test]
+    fn backend_and_fast_are_parsed() {
+        let mut opts = base_options();
+        opts.backend = Some("tsrs".into());
+        opts.fast = Some(true);
+        let cli = build_cli_options(opts).unwrap();
+        assert_eq!(cli.backend, Some(Backend::Tsrs));
+        assert!(cli.fast);
+
+        assert_eq!(build_cli_options(base_options()).unwrap().backend, None);
+    }
+
+    #[test]
+    fn unknown_backend_is_rejected() {
+        let mut opts = base_options();
+        opts.backend = Some("tsgo".into());
+        assert!(build_cli_options(opts).is_err());
     }
 }

@@ -41,6 +41,10 @@ interface RunOptions {
   cwd?: string;
   /** Restrict the check to these files or directories. Empty / omitted means the full project. */
   subset?: string[];
+  /** Type checker to drive. Defaults to `TSGO_STRICT_BACKEND`, then `'auto'`. */
+  backend?: 'auto' | 'tsc' | 'tsrs';
+  /** Enable tsrs fast mode. Rejected unless tsrs is the resolved backend. */
+  fast?: boolean;
 }
 ```
 
@@ -49,6 +53,8 @@ interface RunOptions {
 | `project` | `string` | `"tsconfig.json"` | tsconfig path, absolute or relative to `cwd`. |
 | `cwd` | `string` | `process.cwd()` | Working directory for binary + config resolution. |
 | `subset` | `string[]` | `[]` | Files/directories to scope the check to. Empty = full project. |
+| `backend` | `'auto' \| 'tsc' \| 'tsrs'` | `TSGO_STRICT_BACKEND`, then `'auto'` | Type checker. `auto` uses tsrs when installed. |
+| `fast` | `boolean` | `false` | tsrs fast mode. May change diagnostics in rare cases. |
 
 ### `RunResult`
 
@@ -60,6 +66,8 @@ interface RunResult {
   exitCode: number;
   diagnostics: RunDiagnostic[];
   timings: RunTiming[];
+  /** The type checker that ran. */
+  backend: 'tsc' | 'tsrs';
 }
 ```
 

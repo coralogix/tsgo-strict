@@ -3,7 +3,7 @@
 ## Synopsis
 
 ```bash
-tsgo-strict [fileOrGlob ...] [-p/--project <path>]
+tsgo-strict [fileOrGlob ...] [-p/--project <path>] [--backend <auto|tsc|tsrs>] [--fast]
 ```
 
 ## Arguments
@@ -39,6 +39,27 @@ working directory).
 tsgo-strict --project tsconfig.app.json
 ```
 
+### `--backend <auto|tsc|tsrs>`
+
+The type checker to drive. Default: `$TSGO_STRICT_BACKEND`, then `auto`.
+
+- `auto` uses [tsrs](https://github.com/oxc-project/tsrs) when the project
+  installs it, otherwise the native TypeScript compiler.
+- `tsc` always uses the native TypeScript compiler.
+- `tsrs` always uses tsrs, the Rust port of the TypeScript 7 compiler.
+
+See [Backends](/guide/how-it-works#backends).
+
+### `--fast`
+
+Enable tsrs fast mode. It is faster on large machines but may change
+diagnostics in rare cases, so it is off unless asked for. Only valid when tsrs
+is the resolved backend. An ambient `TSRS_FAST` variable is ignored.
+
+### `--timing`
+
+Print the backend that ran and a per-phase timing breakdown to stderr.
+
 ## Exit codes
 
 | Code | Meaning |
@@ -53,12 +74,22 @@ See [Exit codes](/reference/exit-codes) for how to interpret each in CI.
 
 ### `TSGO_BINARY`
 
-Explicit path to a `tsgo` binary. When set, this is the highest-priority
-resolver — used instead of `node_modules/.bin/tsgo` or `PATH`.
+Explicit path to a compiler binary. When set, this is the highest-priority
+resolver for every backend. Under `auto` it is treated as the native
+TypeScript compiler; pass `--backend tsrs` if it points at tsrs.
 
 ```bash
 TSGO_BINARY=/usr/local/bin/tsgo tsgo-strict
 ```
+
+### `TSGO_STRICT_BACKEND`
+
+Default for `--backend` (`auto`, `tsc` or `tsrs`).
+
+### `TSRS_BINARY`
+
+Explicit path to a tsrs binary, used by the `auto` and `tsrs` backends after
+`TSGO_BINARY`. The same variable the `tsrs` launcher honors.
 
 ## Output format
 

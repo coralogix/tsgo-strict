@@ -13,7 +13,8 @@
 // limitations under the License.
 
 use crate::config::base_url::{
-    normalize_base_url, rewrite_relative_paths, rewrite_relative_type_roots,
+    normalize_base_url, rewrite_relative_path_options, rewrite_relative_paths,
+    rewrite_relative_type_roots,
 };
 use crate::config::v6_compat::apply_v6_compat_shims;
 use crate::errors::Error;
@@ -141,6 +142,7 @@ pub fn write_temp_config(
         // tsgo resolves them the same way it would from the real config.
         let leaf_dir = project_path.parent().unwrap_or(Utf8Path::new("."));
         rewrite_relative_paths(&mut compiler_options, leaf_dir);
+        rewrite_relative_path_options(&mut compiler_options, leaf_dir);
         let type_roots_anchor = effective_type_roots_dir
             .map(|p| p.as_path())
             .unwrap_or(leaf_dir);

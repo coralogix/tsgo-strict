@@ -21,6 +21,9 @@
 
 export type Category = 'error' | 'warning' | 'message';
 
+/** `auto` uses tsrs when the project installs it, otherwise the native TypeScript compiler. */
+export type Backend = 'auto' | 'tsc' | 'tsrs';
+
 export interface RunOptions {
   /** Path to the project tsconfig, absolute or relative to `cwd`. Defaults to `tsconfig.json`. */
   project?: string;
@@ -28,6 +31,13 @@ export interface RunOptions {
   cwd?: string;
   /** Restrict the check to these files or directories. Empty / omitted means the full project. */
   subset?: string[];
+  /** Type checker to drive. Defaults to `TSGO_STRICT_BACKEND`, then `'auto'`. */
+  backend?: Backend;
+  /**
+   * Enable tsrs fast mode. Faster, but may change diagnostics in rare cases.
+   * Rejected unless tsrs is the resolved backend. An ambient `TSRS_FAST` is ignored.
+   */
+  fast?: boolean;
 }
 
 export interface RunDiagnostic {
@@ -55,7 +65,12 @@ export interface RunResult {
   exitCode: number;
   diagnostics: RunDiagnostic[];
   timings: RunTiming[];
+  /** The type checker that ran. */
+  backend: Exclude<Backend, 'auto'>;
 }
 
-/** Run the strict checker programmatically. Resolves with structured diagnostics and per-phase timings. */
+/**
+ * Run the strict checker programmatically. Resolves with structured diagnostics and per-phase timings.
+ * Rejects on tool or configuration failure, including tsconfig errors that stop TypeScript from type-checking.
+ */
 export function run(options?: RunOptions): Promise<RunResult>;

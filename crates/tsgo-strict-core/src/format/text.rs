@@ -40,7 +40,7 @@ pub fn format_text_output(diagnostics: &[Diagnostic], cwd: &Utf8PathBuf) -> Text
     }
 }
 
-fn format_line(d: &Diagnostic, cwd: &Utf8PathBuf) -> String {
+pub(crate) fn format_line(d: &Diagnostic, cwd: &Utf8PathBuf) -> String {
     let code = format!("TS{}", d.code);
     let category = d.category.as_str();
     match (&d.file, d.line, d.column) {

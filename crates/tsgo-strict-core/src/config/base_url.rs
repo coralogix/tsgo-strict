@@ -62,18 +62,60 @@ pub fn resolve_effective_type_roots_dir(chain: &[(PathBuf, Value)]) -> Option<Ut
 
 /// Shallow-per-key merge of `compilerOptions` across the extends chain.
 /// Last-one-wins per key, matching TypeScript's config inheritance.
+///
+/// Relative [`CONFIG_RELATIVE_PATH_OPTIONS`] are made absolute against the
+/// config that defined them, since the merged map may be inlined into a
+/// transient tsconfig that lives in a different directory.
 pub fn resolve_effective_compiler_options(
     chain: &[(PathBuf, Value)],
 ) -> serde_json::Map<String, Value> {
     let mut merged = serde_json::Map::new();
-    for (_dir, cfg) in chain {
+    for (dir, cfg) in chain {
         if let Some(co) = cfg.get("compilerOptions").and_then(|v| v.as_object()) {
+            let mut co = co.clone();
+            if let Ok(anchor) = Utf8PathBuf::try_from(dir.clone()) {
+                rewrite_relative_path_options(&mut co, &anchor);
+            }
             for (key, value) in co {
-                merged.insert(key.clone(), value.clone());
+                merged.insert(key, value);
             }
         }
     }
     merged
+}
+
+/// Path-valued compiler options that tsc resolves against the directory of
+/// the tsconfig declaring them. `paths`, `typeRoots` and `baseUrl` have their
+/// own handling. TypeScript 7 validates `rootDir` even under `noEmit`, so a
+/// relative `rootDir` resolved from the transient config's directory reports
+/// TS6059 and suppresses every semantic diagnostic.
+pub const CONFIG_RELATIVE_PATH_OPTIONS: &[&str] = &[
+    "rootDir",
+    "rootDirs",
+    "outDir",
+    "declarationDir",
+    "tsBuildInfoFile",
+];
+
+/// Rewrite relative [`CONFIG_RELATIVE_PATH_OPTIONS`] to absolute paths
+/// anchored at `anchor`. Already-absolute entries are left alone.
+pub fn rewrite_relative_path_options(
+    compiler_options: &mut serde_json::Map<String, Value>,
+    anchor: &Utf8Path,
+) {
+    for key in CONFIG_RELATIVE_PATH_OPTIONS {
+        match compiler_options.get_mut(*key) {
+            Some(Value::String(s)) => *s = resolve_path_entry(s, anchor),
+            Some(Value::Array(arr)) => {
+                for entry in arr.iter_mut() {
+                    if let Value::String(s) = entry {
+                        *s = resolve_path_entry(s, anchor);
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
 }
 
 /// Remove `baseUrl` from compiler options and rewrite `paths` entries to
@@ -370,6 +412,25 @@ mod tests {
     }
 
     #[test]
+    fn effective_compiler_options_anchor_path_options_at_defining_config() {
+        let chain = vec![
+            (
+                PathBuf::from("/workspace"),
+                json!({ "compilerOptions": { "rootDir": ".", "rootDirs": ["a", "/abs"] } }),
+            ),
+            (
+                PathBuf::from("/workspace/libs/x"),
+                json!({ "compilerOptions": { "outDir": "../../dist", "strict": false } }),
+            ),
+        ];
+        let merged = resolve_effective_compiler_options(&chain);
+        assert_eq!(merged["rootDir"], json!("/workspace/."));
+        assert_eq!(merged["rootDirs"], json!(["/workspace/a", "/abs"]));
+        assert_eq!(merged["outDir"], json!("/workspace/libs/x/../../dist"));
+        assert_eq!(merged["strict"], json!(false));
+    }
+
+    #[test]
     fn resolve_effective_type_roots_dir_none_when_absent() {
         let chain = vec![(PathBuf::from("/workspace"), json!({}))];
         assert!(resolve_effective_type_roots_dir(&chain).is_none());
@@ -445,6 +506,6 @@ mod tests {
         let merged = resolve_effective_compiler_options(&chain);
         assert_eq!(merged["target"], json!("ES2020"));
         assert_eq!(merged["strict"], json!(true));
-        assert_eq!(merged["outDir"], json!("./dist"));
+        assert_eq!(merged["outDir"], json!("/leaf/./dist"));
     }
 }

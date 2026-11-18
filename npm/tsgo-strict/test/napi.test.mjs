@@ -47,6 +47,9 @@ const TYPEROOT_AUTODISCOVERY_FIXTURE = path.join(__dirname, 'fixtures', 'typeroo
 const TYPEROOT_DEFAULT_FIXTURE = path.join(__dirname, 'fixtures', 'typeroot-default');
 const V6_DEPRECATED_OPTIONS_FIXTURE = path.join(__dirname, 'fixtures', 'v6-deprecated-options');
 const V6_ESMODULEINTEROP_FALSE_FIXTURE = path.join(__dirname, 'fixtures', 'v6-esmoduleinterop-false');
+const ROOT_DIR_BASE_URL_FIXTURE = path.join(__dirname, 'fixtures', 'root-dir-base-url');
+const ROOT_DIR_LEAF_FIXTURE = path.join(__dirname, 'fixtures', 'root-dir-leaf');
+const CONFIG_ERROR_FIXTURE = path.join(__dirname, 'fixtures', 'config-error');
 const REPO_ROOT = path.resolve(__dirname, '..', '..', '..');
 
 // Skip the full suite when the platform addon hasn't been staged. This keeps
@@ -505,3 +508,102 @@ test('v6 compat shim is non-destructive for clean fixtures', { skip: !addonReady
     assert.ok(!d.file.includes('out-of-scope'), `out-of-scope file leaked: ${d.file}`);
   }
 });
+
+test('relative rootDir inherited alongside baseUrl resolves against its own config', { skip: !addonReady }, async () => {
+  // Nx-style base: `rootDir: "."` and `baseUrl` in the workspace root, so the
+  // options are inlined into the transient config. Left relative, TypeScript 7
+  // resolves rootDir against the temp dir, reports TS6059 and skips checking.
+  const libDir = path.join(ROOT_DIR_BASE_URL_FIXTURE, 'libs', 'foo');
+  const result = await run({ project: path.join(libDir, 'tsconfig.lib.json'), cwd: libDir });
+
+  assert.deepEqual(result.diagnostics.map((d) => d.code), [7006]);
+  assert.equal(result.exitCode, 1);
+});
+
+test('relative rootDir in the leaf config resolves against the leaf', { skip: !addonReady }, async () => {
+  const result = await run({
+    project: path.join(ROOT_DIR_LEAF_FIXTURE, 'tsconfig.json'),
+    cwd: ROOT_DIR_LEAF_FIXTURE,
+  });
+
+  assert.deepEqual(result.diagnostics.map((d) => d.code), [7006]);
+  assert.equal(result.exitCode, 1);
+});
+
+test('a tsconfig option error fails the run instead of reporting a clean check', { skip: !addonReady }, async () => {
+  // TS5069 makes TypeScript skip semantic checking, so the strict error in
+  // src/bad.ts is never reported. That must not look like a clean run.
+  await assert.rejects(
+    run({ project: path.join(CONFIG_ERROR_FIXTURE, 'tsconfig.json'), cwd: CONFIG_ERROR_FIXTURE }),
+    /configuration errors[\s\S]*TS5069/,
+  );
+});
+
+test('backend option selects tsc or tsrs explicitly', { skip: !addonReady }, async () => {
+  const project = path.join(FIXTURE, 'tsconfig.json');
+  // The repo installs tsrs, so `auto` must pick it.
+  for (const [backend, ran] of [['tsc', 'tsc'], ['tsrs', 'tsrs'], ['auto', 'tsrs']]) {
+    const result = await run({ project, cwd: FIXTURE, backend });
+    assert.equal(result.backend, ran, `backend ${backend}`);
+    assert.equal(result.exitCode, 1, `backend ${backend}`);
+    assert.ok(result.errorCount > 0, `backend ${backend}`);
+  }
+});
+
+test('unknown backend and fast mode without tsrs are rejected', { skip: !addonReady }, async () => {
+  const project = path.join(FIXTURE, 'tsconfig.json');
+  await assert.rejects(run({ project, cwd: FIXTURE, backend: 'tsgo' }), /unknown backend 'tsgo'/);
+  await assert.rejects(run({ project, cwd: FIXTURE, backend: 'tsc', fast: true }), /tsrs backend/);
+});
+
+test('tsrs fast mode reports the same diagnostics as default mode', { skip: !addonReady }, async () => {
+  const project = path.join(FIXTURE, 'tsconfig.json');
+  const normal = await run({ project, cwd: FIXTURE, backend: 'tsrs' });
+  const fast = await run({ project, cwd: FIXTURE, backend: 'tsrs', fast: true });
+  assert.deepEqual(summarize(fast), summarize(normal));
+});
+
+test('tsc and tsrs report identical diagnostics on every fixture', { skip: !addonReady }, async () => {
+  const cases = [
+    [FIXTURE, 'tsconfig.json'],
+    [PRAGMA_FIXTURE, 'tsconfig.json'],
+    [EXCLUDE_PATTERN_FIXTURE, 'tsconfig.json'],
+    [EXTENDS_PLUGIN_FIXTURE, 'tsconfig.json'],
+    [EXTENDS_EXCLUDE_FIXTURE, 'tsconfig.json'],
+    [TSCONFIG_EXCLUDE_FIXTURE, 'tsconfig.json'],
+    [BASE_URL_FIXTURE, 'tsconfig.json'],
+    [BASE_URL_INHERITED_FIXTURE, 'tsconfig.json'],
+    [path.join(SOLUTION_STYLE_FIXTURE, 'libs', 'foo'), 'tsconfig.lib.json'],
+    [BASE_URL_PATHS_FIXTURE, 'tsconfig.json'],
+    [FILES_ARRAY_FIXTURE, 'tsconfig.json'],
+    [ORPHAN_FILE_FIXTURE, 'tsconfig.json'],
+    [TYPES_SUBPATH_FIXTURE, 'tsconfig.json'],
+    [TYPEROOT_AUTODISCOVERY_FIXTURE, 'tsconfig.json'],
+    [TYPEROOT_DEFAULT_FIXTURE, 'tsconfig.json'],
+    [V6_DEPRECATED_OPTIONS_FIXTURE, 'tsconfig.json'],
+    [V6_ESMODULEINTEROP_FALSE_FIXTURE, 'tsconfig.json'],
+    [path.join(ROOT_DIR_BASE_URL_FIXTURE, 'libs', 'foo'), 'tsconfig.lib.json'],
+    [ROOT_DIR_LEAF_FIXTURE, 'tsconfig.json'],
+  ];
+  for (const [cwd, config] of cases) {
+    const project = path.join(cwd, config);
+    const [tsc, tsrs] = await Promise.all([
+      run({ project, cwd, backend: 'tsc' }),
+      run({ project, cwd, backend: 'tsrs' }),
+    ]);
+    assert.deepEqual(summarize(tsrs), summarize(tsc), `${path.relative(__dirname, project)}`);
+  }
+});
+
+function summarize(result) {
+  return {
+    exitCode: result.exitCode,
+    diagnostics: result.diagnostics.map(({ file, line, column, code, message }) => ({
+      file,
+      line,
+      column,
+      code,
+      message,
+    })),
+  };
+}

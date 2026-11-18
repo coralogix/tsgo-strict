@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::binary::resolve_tsgo_binary;
+use crate::binary::{resolve_compiler, Compiler};
 use crate::config::load_project_context;
 use crate::diagnostics::{Category, Diagnostic};
 use crate::errors::Error;
@@ -21,7 +21,8 @@ use crate::files::{
     walk_plugin_paths,
 };
 use crate::format::format_text_output;
-use crate::options::CliOptions;
+use crate::format::text::format_line;
+use crate::options::{Backend, CliOptions};
 use crate::perf::{Timer, TimerEntry};
 use crate::runner::spawn::{query_reachable_files, run_tsgo, RunInput, TsgoRunResult};
 use camino::Utf8PathBuf;
@@ -41,6 +42,8 @@ pub struct StructuredOutcome {
     pub diagnostics: Vec<Diagnostic>,
     pub timings: Vec<TimerEntry>,
     pub exit_code: i32,
+    /// The backend that was resolved (never [`Backend::Auto`]).
+    pub backend: Backend,
 }
 
 pub fn run_structured(options: &CliOptions) -> Result<StructuredOutcome, Error> {
@@ -50,13 +53,17 @@ pub fn run_structured(options: &CliOptions) -> Result<StructuredOutcome, Error> 
     let context = load_project_context(&options.cwd, &options.project, STRICT_PLUGIN_NAME)?;
     timer.end("config-load");
 
-    let binary = resolve_tsgo_binary(&options.cwd)?;
+    let compiler = resolve_compiler(
+        &options.cwd,
+        Backend::resolve(options.backend)?,
+        options.fast,
+    )?;
 
     timer.start("file-resolution");
     let subset_files = resolve_subset_inputs(&options.subset_inputs, &options.cwd)?;
 
     let effective_targets =
-        resolve_effective_targets(&context, &subset_files, &binary, &options.cwd, &mut timer)?;
+        resolve_effective_targets(&context, &subset_files, &compiler, &options.cwd, &mut timer)?;
     timer.end("file-resolution");
 
     if effective_targets.is_empty() {
@@ -64,6 +71,7 @@ pub fn run_structured(options: &CliOptions) -> Result<StructuredOutcome, Error> 
             diagnostics: Vec::new(),
             timings: timer.entries().to_vec(),
             exit_code: 0,
+            backend: compiler.backend,
         });
     }
 
@@ -73,7 +81,7 @@ pub fn run_structured(options: &CliOptions) -> Result<StructuredOutcome, Error> 
         project_path: &context.project_path,
         raw_config: &context.raw_config,
         files: &effective_targets,
-        binary: &binary,
+        compiler: &compiler,
         effective_base_url: context.effective_base_url.as_ref(),
         effective_compiler_options: context.effective_compiler_options.as_ref(),
         effective_type_roots_dir: context.effective_type_roots_dir.as_ref(),
@@ -82,6 +90,7 @@ pub fn run_structured(options: &CliOptions) -> Result<StructuredOutcome, Error> 
     timer.end("strict-run");
 
     check_tsgo_result(&result)?;
+    check_config_diagnostics(&result.diagnostics, &options.cwd)?;
 
     let diagnostics = filter_to_targets(result.diagnostics, &effective_targets);
 
@@ -96,6 +105,7 @@ pub fn run_structured(options: &CliOptions) -> Result<StructuredOutcome, Error> 
         diagnostics: errors,
         timings: timer.entries().to_vec(),
         exit_code,
+        backend: compiler.backend,
     })
 }
 
@@ -108,13 +118,17 @@ pub fn list_files(options: &CliOptions) -> Result<Vec<Utf8PathBuf>, Error> {
     let context = load_project_context(&options.cwd, &options.project, STRICT_PLUGIN_NAME)?;
     timer.end("config-load");
 
-    let binary = resolve_tsgo_binary(&options.cwd)?;
+    let compiler = resolve_compiler(
+        &options.cwd,
+        Backend::resolve(options.backend)?,
+        options.fast,
+    )?;
 
     timer.start("file-resolution");
     let subset_files = resolve_subset_inputs(&options.subset_inputs, &options.cwd)?;
 
     let mut effective =
-        resolve_effective_targets(&context, &subset_files, &binary, &options.cwd, &mut timer)?;
+        resolve_effective_targets(&context, &subset_files, &compiler, &options.cwd, &mut timer)?;
     timer.end("file-resolution");
 
     effective.sort();
@@ -134,7 +148,7 @@ pub fn list_files(options: &CliOptions) -> Result<Vec<Utf8PathBuf>, Error> {
 fn resolve_effective_targets(
     context: &crate::config::ProjectContext,
     subset_files: &[Utf8PathBuf],
-    binary: &Utf8PathBuf,
+    compiler: &Compiler,
     cwd: &Utf8PathBuf,
     timer: &mut Timer,
 ) -> Result<Vec<Utf8PathBuf>, Error> {
@@ -144,7 +158,7 @@ fn resolve_effective_targets(
     // the query when a user subset was supplied — they explicitly chose.
     let reachable: Option<Vec<String>> = if subset_files.is_empty() {
         timer.start("reachable-query");
-        let r = query_reachable_files(binary, &context.project_path, cwd)?;
+        let r = query_reachable_files(compiler, &context.project_path, cwd)?;
         timer.end("reachable-query");
         Some(r)
     } else {
@@ -312,6 +326,43 @@ fn check_tsgo_result(result: &TsgoRunResult) -> Result<(), Error> {
     }
 }
 
+/// Fail on errors TypeScript attaches to a tsconfig (or to no file at all).
+///
+/// Option errors such as TS5069 or TS6059 make the compiler skip semantic
+/// checking entirely, and the subset filter would otherwise drop them because
+/// they are not in a checked source file, reporting a clean run that never
+/// type-checked anything. Every config error fails, so a code nobody has
+/// seen yet fails loudly rather than passing silently. The one exception is
+/// [`UNKNOWN_COMPILER_OPTION`]: it does not stop checking, and TypeScript 7
+/// reports it for every option it removed, which TS 5/6 configs still carry.
+fn check_config_diagnostics(diagnostics: &[Diagnostic], cwd: &Utf8PathBuf) -> Result<(), Error> {
+    let lines: Vec<String> = diagnostics
+        .iter()
+        .filter(|d| {
+            d.category == Category::Error
+                && d.code != UNKNOWN_COMPILER_OPTION
+                && is_config_diagnostic(d)
+        })
+        .map(|d| format_line(d, cwd))
+        .collect();
+    if lines.is_empty() {
+        return Ok(());
+    }
+    Err(Error::ConfigDiagnostics(lines.join("\n")))
+}
+
+/// TS5023, "Unknown compiler option".
+const UNKNOWN_COMPILER_OPTION: u32 = 5023;
+
+fn is_config_diagnostic(diagnostic: &Diagnostic) -> bool {
+    match &diagnostic.file {
+        None => true,
+        Some(f) => f
+            .extension()
+            .is_some_and(|ext| ext.eq_ignore_ascii_case("json")),
+    }
+}
+
 fn normalize(path: &Utf8PathBuf) -> String {
     path.as_str().replace('\\', "/").to_ascii_lowercase()
 }
@@ -332,6 +383,41 @@ mod tests {
             message: format!("e{code}"),
             raw_line: None,
         }
+    }
+
+    #[test]
+    fn config_diagnostics_fail_for_tsconfig_and_file_less_errors() {
+        let cwd = Utf8PathBuf::from("/p");
+        let in_tsconfig = mk(Some("/p/tsconfig.json"), 5069);
+        let err = check_config_diagnostics(&[mk(Some("/p/src/a.ts"), 7006), in_tsconfig], &cwd)
+            .unwrap_err();
+        assert!(
+            matches!(err, Error::ConfigDiagnostics(ref m) if m.contains("tsconfig.json(1,1): error TS5069")),
+            "{err}"
+        );
+
+        let file_less = Diagnostic {
+            line: None,
+            column: None,
+            ..mk(None, 6059)
+        };
+        assert!(check_config_diagnostics(&[file_less], &cwd).is_err());
+    }
+
+    #[test]
+    fn config_diagnostics_tolerate_unknown_compiler_options() {
+        let cwd = Utf8PathBuf::from("/p");
+        assert!(check_config_diagnostics(&[mk(Some("/p/tsconfig.json"), 5023)], &cwd).is_ok());
+    }
+
+    #[test]
+    fn config_diagnostics_ignore_source_errors_and_non_errors() {
+        let cwd = Utf8PathBuf::from("/p");
+        let warning = Diagnostic {
+            category: Category::Warning,
+            ..mk(Some("/p/tsconfig.json"), 5101)
+        };
+        assert!(check_config_diagnostics(&[mk(Some("/p/src/a.ts"), 2322), warning], &cwd).is_ok());
     }
 
     /// Regression for subset scoping: tsgo compiles every file the parent

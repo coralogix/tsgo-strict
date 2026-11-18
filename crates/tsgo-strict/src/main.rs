@@ -16,6 +16,7 @@ use camino::Utf8PathBuf;
 use clap::Parser;
 use std::io::Write;
 use std::process::ExitCode;
+use tsgo_strict_core::options::Backend;
 use tsgo_strict_core::{list_files, run_structured, CliOptions};
 
 #[derive(Parser, Debug)]
@@ -37,6 +38,15 @@ struct Cli {
     /// Print phase timing breakdown to stderr
     #[arg(long)]
     timing: bool,
+
+    /// Type checker: auto (tsrs when installed, else tsc), tsc or tsrs.
+    /// Defaults to $TSGO_STRICT_BACKEND, then auto.
+    #[arg(long, value_parser = clap::value_parser!(Backend))]
+    backend: Option<Backend>,
+
+    /// Enable tsrs fast mode. Faster, but may change diagnostics in rare cases.
+    #[arg(long)]
+    fast: bool,
 }
 
 fn main() -> ExitCode {
@@ -60,6 +70,8 @@ fn main() -> ExitCode {
         subset_inputs: cli.subset,
         list_files: cli.list_files,
         timing: cli.timing,
+        backend: cli.backend,
+        fast: cli.fast,
     };
 
     if options.list_files {
@@ -87,6 +99,7 @@ fn main() -> ExitCode {
             let _ = std::io::stdout().write_all(format!("{body}\n").as_bytes());
 
             if options.timing {
+                let _ = writeln!(std::io::stderr(), "\nBackend: {}", outcome.backend.as_str());
                 print_timings(&outcome.timings);
             }
 
