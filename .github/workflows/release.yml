@@ -71,7 +71,7 @@ jobs:
       # fetch-depth: 0 is required so git can see previous `v*` tags —
       # we derive the current version from the latest tag, not from
       # the in-repo package.json (which is frozen at its initial value).
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -165,9 +165,9 @@ jobs:
     env:
       VERSION: ${{ needs.prepare.outputs.version }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
 
@@ -229,7 +229,7 @@ jobs:
           fi
 
       - name: Upload platform package artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: platform-${{ matrix.triple }}
           path: npm/platforms/${{ matrix.triple }}/
@@ -248,7 +248,7 @@ jobs:
       VERSION: ${{ needs.prepare.outputs.version }}
       TAG: ${{ needs.prepare.outputs.tag }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -256,7 +256,7 @@ jobs:
       # Publishing there is no `_authToken` to back; npm obtains a
       # short-lived token via OIDC using the job's `id-token: write`.
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 24
           registry-url: 'https://registry.npmjs.org'
@@ -268,7 +268,7 @@ jobs:
         run: npm install -g npm@^11.5.1
 
       - name: Download all platform artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: platform-*
           path: npm/platforms/
@@ -435,15 +435,15 @@ jobs:
       group: pages
       cancel-in-progress: false
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v6
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: pnpm
@@ -460,13 +460,13 @@ jobs:
           DOCS_VERSION: ${{ needs.prepare.outputs.tag }}
 
       - name: Configure Pages
-        uses: actions/configure-pages@v5
+        uses: actions/configure-pages@v6
 
       - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v5
         with:
           path: docs/.vitepress/dist
 
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
